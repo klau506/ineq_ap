@@ -12,6 +12,12 @@ library(tmap)
 ap <- get(load('data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData'))
 deaths <- get(load('data/rfasst_output/m3_get_mort_pm25.output.RData'))
 
+
+## spacial data for plots
+nuts3_plot_data <- get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>% 
+  dplyr::select(-FID)
+
+
 ## read socioeconomic data
 gdp <- eurostat::get_eurostat('nama_10r_3gdp') %>% # gdp NUTS3
   filter(unit == 'PPS_EU27_2020_HAB') %>% # Purchasing power standard (PPS, EU27 from 2020), per inhabitant
@@ -58,18 +64,16 @@ gva_act <- eurostat::get_eurostat('nama_10r_3gva') # gross value added by act NU
 income <- eurostat::get_eurostat('nama_10r_2hhinc') # income NUTS2 na_item == 'B6N'
 # poverty <- eurostat::get_eurostat('ilc_peps11n') # poverty NUTS2
 
-
+# grided socioeconomic data
 temp_dir <- tempdir()
 unzip("data/Eurostat_Census-GRID_2021_V2.1.zip", exdir = temp_dir)
 sf_data <- sf::st_read(file.path(temp_dir, "ESTAT_Census_2021_V2.gpkg"))
 sf_data <- sf_data %>%
-  select(-ends_with("_CI"))
-
-sf_data_YGE65 <- sf_data %>%
+  dplyr::select(-ends_with("_CI")) %>%
   dplyr::filter(POPULATED == 1, T >= 0)
 
 pl <- ggplot() +
-  geom_sf(data = sf_data_YGE65, 
+  geom_sf(data = sf_data, 
           aes(color = Y_GE65,
               fill = Y_GE65)) +
   labs(fill = "Y_GE65") + 
@@ -90,10 +94,12 @@ ggsave(file='figures/pl_prova.pdf', height = 15, width = 15, units = 'cm',
        plot = pl)
 
 
+# merge socioeconomic gridded data with NUTS3 regions
 grid_sf <- st_transform(sf_data_YGE65, crs = st_crs(nuts3_plot_data))
 grid_sf_with_nuts3 <- st_join(grid_sf, nuts3_plot_data, join = st_intersects)
 st_write(grid_sf_with_nuts3, "data/tmp_output_grid_with_nuts3.shp", append = FALSE)
 
+# compute Y_GE65 (elderly people) percentage by NUTS3 region
 grid_sf_with_nuts3_v2 <- as.data.frame(grid_sf_with_nuts3) %>%
   dplyr::filter(T > 0, Y_GE65 >= 0) %>% 
   dplyr::select(GRD_ID, Y_GE65, Y_TOT = T, geo)
@@ -106,15 +112,15 @@ grid_sf_with_nuts3_v3 <- unique(grid_sf_with_nuts3_v2) %>%
   dplyr::mutate(per_elderly = ifelse(!is.na(Y_GE65), Y_GE65 / Y_TOT, NA_real_)) %>% 
   dplyr::group_by(geo) %>%
   dplyr::summarise(mean_per_elderly = mean(per_elderly, na.rm = TRUE)) %>%
-  dplyr::ungroup()
-
-grid_sf_with_nuts3_v4 <- as.data.frame(grid_sf_with_nuts3_v3) %>% 
+  dplyr::ungroup() %>% 
+  as.data.frame() %>% 
+  # merge with NUTS3 geometries
   dplyr::filter(rowSums(is.na(.)) == 0) %>% 
   dplyr::left_join(nuts3_plot_data %>% 
                      select(geo, geometry),
                    by = 'geo')
 
-grid_sf_with_nuts3_v4 <- sf::st_sf(grid_sf_with_nuts3_v4, geometry = grid_sf_with_nuts3_v4$geometry)
+grid_sf_with_nuts3_v3 <- sf::st_sf(grid_sf_with_nuts3_v3, geometry = grid_sf_with_nuts3_v3$geometry)
 
 plot_elderly <- tm_shape(nuts3_plot_data,
                          projection = "EPSG:3035",
@@ -122,7 +128,7 @@ plot_elderly <- tm_shape(nuts3_plot_data,
                          ylim = c(1320000, 5650000)
 ) +
   tm_fill("lightgrey") +
-  tm_shape(grid_sf_with_nuts3_v4) +
+  tm_shape(grid_sf_with_nuts3_v3) +
   tm_polygons("mean_per_elderly",
               title = "Elderly people [%]",
               palette = "Oranges",
@@ -132,32 +138,9 @@ plot_elderly <- tm_shape(nuts3_plot_data,
   tm_layout(legend.text.size = 0.6)
 
 
-tmap::tmap_save(plot_elderly, filename = "figures/plot_elderly21.pdf",
+tmap::tmap_save(plot_elderly, filename = "figures/plot_elderly2.pdf",
                 width = 100, height = 100, units = 'mm', dpi = 300)
 
-
-
-# ctry_nuts <- as(ctry_nuts_sf, "SpatVector")
-
-# Average raster values by polygon
-ctry_nuts$pm25_avg <- terra::extract(pm25_weighted_nuts3, ctry_nuts, mean, na.rm = TRUE)$layer
-
-
-# 
-# plot_M <- tm_shape(sf_data %>% 
-#                      dplyr::filter(POPULATED == 1, M >= 0)) + 
-#   tm_borders() + 
-#   tm_fill("M", 
-#           title = "M Value", 
-#           palette = "YlOrRd",
-#           style = "cont"
-#   )
-# tmap::tmap_save(plot_M, filename = "figures/plot_prova.pdf",
-#                 width = 100, height = 100, units = 'mm', dpi = 300)
-
-# spacial data for plots
-nuts3_plot_data <- get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>% 
-  dplyr::select(-FID)
 
 # ==============================================================================
 #                              COMPUTE INDICATORS                              #

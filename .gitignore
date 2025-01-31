@@ -1,3 +1,9 @@
 
 /.Rproj.user
 data/.Rhistory
+/data
+/figures
+/ideas
+/slides
+.RData
+.Rhistory

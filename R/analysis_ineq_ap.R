@@ -125,35 +125,27 @@ tmap::tmap_save(plot_elderly, filename = "figures/plot_elderly.pdf",
                 width = 100, height = 100, units = 'mm', dpi = 300)
 
 
-
-#### proves - TODO delete ==================================================================
-
-# pl <- ggplot() +
-#   geom_sf(data = sf_data, 
-#           aes(color = Y_GE65,
-#               fill = Y_GE65)) +
-#   labs(fill = "Y_GE65") + 
-#   ggpubr::theme_pubr() +
-#   theme(panel.background = element_rect(fill = 'white'),
-#         panel.grid.major = element_line(colour = "grey90"),
-#         panel.ontop = FALSE,
-#         strip.text = element_text(size = 12),
-#         strip.background = element_blank(),
-#         axis.title.x = element_text(size = 12),
-#         axis.text = element_text(size = 12),
-#         legend.key.size = unit(1.5, 'cm'),
-#         legend.title = element_text(size = 12),
-#         legend.text = element_text(size = 12),
-#         legend.position = "bottom")
-# 
-# ggsave(file='figures/pl_prova.pdf', height = 15, width = 15, units = 'cm',
-#        plot = pl)
-#### fi proves =====================
-
-#### Harmonized income - TODO fix =====================
-harm_data <- sf::st_read("data/Replication data/merged_output_2019.shp") %>% # TODO check countries' borders. Some NUTS3 are misplaced
+#### Harmonized income =========================================================
+# Source: https://entrepot.recherche.data.gouv.fr/dataset.xhtml?persistentId=doi:10.57745/TTIOKI
+harm_data <- sf::st_read("data/Replication data/merged_output_2019_wID_clean.shp") %>%
   dplyr::mutate(Population = as.numeric(Population),
                 Gini = as.numeric(Gini))
+
+# check mismatched data (harmonized socioeconomic data NUTS3 code does not match the corresponding CTRY)
+iso2_iso3 <- rfasst::ctry_nuts3_codes %>% 
+  dplyr::select(ISO2, ISO3) %>% 
+  dplyr::distinct()
+
+harm_data_repair <- data.table::as.data.table(harm_data) %>%
+  dplyr::select('Year','AU_name','AU_code','ISO','NUTS2','id' = 'id_1','NUTS_ID','CNTR_CODE','geo') %>% 
+  dplyr::left_join(iso2_iso3,
+                   by = c('ISO' = 'ISO3')) %>% 
+  dplyr::rename(iso_nuts2 = ISO2) %>% 
+  dplyr::mutate(geo_nuts2 = stringr::str_sub(NUTS_ID, 1, 2)) %>% 
+  dplyr::mutate(equal = iso_nuts2 == geo_nuts2) %>% 
+  dplyr::filter(!equal) # OK!!
+
+# compute indicators: disposable income & gini index
 harm_data_nuts3 <- data.table::as.data.table(harm_data) %>% 
   dplyr::mutate(Id = row_number()) %>% 
   dplyr::select(Id, Year, ISO, geo, Population, Disp_Inc_P, Gini) %>% 
@@ -168,109 +160,56 @@ harm_data_nuts3 <- data.table::as.data.table(harm_data) %>%
   # weighted gini index: 
   gcamdata::left_join_error_no_match(compute_gini_by_nuts3(.),
                                      by = c('Year', 'geo')) %>% 
-  dplyr::select(Id, Year, ISO, geo, Population, Disp_Inc_P, Gini, Population_nuts3, Disp_Inc_P_nuts3, Gini_nuts3)
-
-
-
-iso2_iso3 <- rfasst::ctry_nuts3_codes %>% 
-  dplyr::select(ISO2, ISO3) %>% 
+  dplyr::select(Year, ISO, geo, Population_nuts3, Disp_Inc_P_nuts3, Gini_nuts3) %>% 
   dplyr::distinct()
 
-harm_data_repair <- data.table::as.data.table(harm_data) %>%
-  dplyr::select('Year','AU_name','AU_code','ISO','NUTS2','id','NUTS_ID','CNTR_CODE','geo') %>% 
-  dplyr::left_join(iso2_iso3,
-                   by = c('ISO' = 'ISO3')) %>% 
-  dplyr::rename(iso_nuts2 = ISO2) %>% 
-  dplyr::mutate(geo_nuts2 = stringr::str_sub(geo, 1, 2)) %>% 
-  dplyr::mutate(equal = iso_nuts2 == geo_nuts2) %>% 
-  dplyr::filter(!equal)
-  # # remove GRB, SWE, SVN case
-  # dplyr::filter(!(ISO == 'GRB' & CNTR_CODE == 'UK'),
-  #               !(ISO == 'SWE' & CNTR_CODE == 'SE'),
-  #               !(ISO == 'SVN' & CNTR_CODE == 'SI'),
-  #               !(ISO == 'PRT' & CNTR_CODE == 'PT'),
-  #               !(ISO == 'SRB' & CNTR_CODE == 'RS'))
-
-  # # Gini_nuts3 = SUM_regInNUTS3(i) SUM_regInNUTS3(j) [(Pop_i * Pop_j * |Disp_Inc_P_i - Disp_Inc_P_j|) / 2 * Pop_T^2 * Disp_Inc_P_T], 
-  # # Disp_Inc_P_T = SUM_regInNUTS3(Pop * Disp_Inc_P) / SUM_regInNUTS3(Pop)
-  # dplyr::group_by(Year, geo, ISO) %>% 
-  # dplyr::mutate(Disp_Inc_P_pw_nuts3 = sum(Disp_Inc_P_pw)) %>% # Disp_Inc_P_T: total disposalbe income pop-weighted
-  # dplyr::mutate(Disp_Inc_P_T = Disp_Inc_P_pw_nuts3 / Population_nuts3) %>% 
-  # 
-  
+harm_data_nuts3_sf <- harm_data_nuts3 %>% 
+  left_join(nuts3_plot_data %>% 
+              dplyr::select(geo, geometry),
+            by = 'geo')
+harm_data_nuts3_sf <- sf::st_sf(harm_data_nuts3_sf, geometry = harm_data_nuts3_sf$geometry)
 
 
-shapefile <- sf::st_read("data/harmonized_income_data/yearly_files/disp_inc_2019.gpkg")
-# shapefile <- sf::st_read("data/Replication data/merged_output.shp")
-# shapefile <- sf::st_read("data/Replication data/ESP/Disposable_Inc_ESP.shp")
-pl <- ggplot(data = aa) +
-  geom_sf(aes(fill = NUTS_ID), color = "black", size = 0)
-  theme(legend.position = 'none') 
-#   scale_fill_viridis_c(option = "magma", na.value = "white") + 
-#   theme_minimal() +
-#   labs(title = "Gini index",
-#        fill = "Gini index")
-# ggsave(pl, filename = "figures/pl_prova_harmonized_data_gini.pdf",
-#        width = 100, height = 100, units = 'mm')
-
-# merge with NUTS3 geometries
-shapefile_sf_with_nuts3_v2 <- as.data.frame(shapefile_sf_with_nuts3) %>%
-  dplyr::filter(T > 0, Y_GE65 >= 0) %>% 
-  dplyr::select(GRD_ID, Y_GE65, Y_TOT = T, geo)
-
-grid_sf_with_nuts3_v3 <- unique(grid_sf_with_nuts3_v2) %>% 
-  dplyr::group_by(geo) %>%
-  dplyr::summarise(Y_GE65 = sum(Y_GE65),
-                   Y_TOT = sum(Y_TOT)) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::mutate(per_elderly = ifelse(!is.na(Y_GE65), Y_GE65 / Y_TOT, NA_real_)) %>% 
-  dplyr::group_by(geo) %>%
-  dplyr::summarise(mean_per_elderly = mean(per_elderly, na.rm = TRUE)) %>%
-  dplyr::ungroup() %>% 
-  as.data.frame() %>% 
-  
-  shapefile_sf_with_nuts3 %>% 
-  dplyr::filter(rowSums(is.na(.)) == 0) %>% 
-  dplyr::left_join(nuts3_plot_data %>% 
-                     select(geo, geometry),
-                   by = 'geo')
-
-shapefile_sf_with_nuts3_v2 <- sf::st_sf(shapefile_sf_with_nuts3_v2, geometry = shapefile_sf_with_nuts3_v2$geometry)
-
-plot_prova_ESP_tmap <- tm_shape(nuts3_plot_data,
-                         projection = "EPSG:3035",
-                         xlim = c(2400000, 6500000),
-                         ylim = c(1320000, 5650000)
+plot_income <- tm_shape(nuts3_plot_data,
+                    projection = "EPSG:3035",
+                    xlim = c(2400000, 6500000),
+                    ylim = c(1320000, 5650000)
 ) +
   tm_fill("lightgrey") +
-  tm_shape(shapefile_sf_with_nuts3_v2) +
-  tm_polygons("mean_per_elderly",
-              title = "Elderly people [%]",
+  tm_shape(harm_data_nuts3_sf) +
+  tm_polygons("Disp_Inc_P_nuts3",
+              title = "Disposable Income\n[2015 PPP EU27 €]",
               palette = "Oranges",
               style = "cont"
   ) +
   tm_layout(legend.title.size = 0.8) +
   tm_layout(legend.text.size = 0.6)
 
-
-tmap::tmap_save(plot_prova_ESP_tmap, filename = "figures/plot_prova_ESP_tmap.pdf",
+tmap::tmap_save(plot_income, filename = "figures/plot_income.pdf",
                 width = 100, height = 100, units = 'mm', dpi = 300)
 
+plot_gini <- tm_shape(nuts3_plot_data,
+                    projection = "EPSG:3035",
+                    xlim = c(2400000, 6500000),
+                    ylim = c(1320000, 5650000)
+) +
+  tm_fill("lightgrey") +
+  tm_shape(harm_data_nuts3_sf) +
+  tm_polygons("Gini_nuts3",
+              title = "Gini\nIndex",
+              palette = "Oranges",
+              style = "cont"
+  ) +
+  tm_layout(legend.title.size = 0.8) +
+  tm_layout(legend.text.size = 0.6)
 
-#### fi harmonized income ==============
+tmap::tmap_save(plot_gini, filename = "figures/plot_gini.pdf",
+                width = 100, height = 100, units = 'mm', dpi = 300)
 
 
 # ==============================================================================
 #                              COMPUTE INDICATORS                              #
 # ==============================================================================
-## GINI (index) ================================================================
-
-
-## INCOME PER CAPITA (PPPpc) ===================================================
-socioecon_dt2 <- socioecon_dt %>% 
-  mutate(total_gdp = GDPpc * POP * 1e3) %>% 
-  group_by(CNTR_CODE) %>% 
-  summarise(total_gdp = sum(total_gdp))
 
 ## ELDERLY PEOPLE (% people >= Y75) ============================================
 elderly_age_list <- c("Y75-79","Y80-84","Y85-89","Y90-94","Y95-99","Y_GE100")
@@ -570,7 +509,7 @@ plot_elderly_density <- ggplot(ap_elderly) +
 ggsave(file='figures/plot_elderly_density.pdf', height = 30, width = 20, units = 'cm',
        plot = plot_elderly_density)
 
-## DEATHS vs ELDERLY ===============================================================
+## DEATHS vs ELDERLY ===========================================================
 
 # check normality
 deaths_elderly_sf <- sf::st_join(
@@ -650,3 +589,167 @@ plot_elderly_density_deaths <- ggplot(deaths_elderly) +
 
 ggsave(file='figures/plot_elderly_density_deaths.pdf', height = 30, width = 20, units = 'cm',
        plot = plot_elderly_density_deaths)
+
+## DEATHS vs INCOME ============================================================
+
+# check normality
+deaths_income_sf <- sf::st_join(
+  harm_data_nuts3_sf %>% 
+    dplyr::select(geo, income = Disp_Inc_P_nuts3, geometry),
+  deaths_nuts3_sf %>% 
+    dplyr::select(deaths, geometry)
+) %>% 
+  select(geo, income, deaths, geometry)
+
+deaths_income <- data.table::as.data.table(deaths_income_sf) %>% 
+  select(-geometry) %>% 
+  filter(rowSums(is.na(.)) == 0) %>% 
+  # remove outliers(>95%)
+  filter(deaths <= quantile(deaths, probs = 0.95))
+
+# Histogram
+ggplot(deaths_income, aes(x = deaths)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~ income) %>% 
+  theme(legend.position = 'none')
+
+# Q-Q plot
+ggplot(deaths_income, aes(sample = deaths)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~ income) %>% 
+  theme(legend.position = 'none')
+
+# Anderson-Darling Test
+test <- nortest::ad.test(deaths_income$deaths)
+# A = 14016, p-value < 2.2e-16 --> NOT normal distribution
+
+# Kruskal-Wallis Test (for >2 categories) - non parametric test
+test <- kruskal.test(deaths ~ income, data = deaths_income_sf)
+# Kruskal-Wallis chi-squared = 77811, df = 1309, p-value < 2.2e-16
+rstatix::kruskal_effsize(data = as.data.frame(deaths_income_sf), deaths ~ income)
+# .y.       n effsize method  magnitude
+# * <chr> <int>   <dbl> <chr>   <ord>    
+#   deaths 127198   0.608 eta2[H] large    
+# Result: the effect of the income is SIGNIFICANT and LARGE
+
+
+
+deaths_income <- deaths_income %>% 
+  dplyr::mutate(income_decile = as.factor(ntile(income, 5)))
+
+deaths_elderly_medi <- deaths_income[, .(medi = quantile(deaths, 0.5, na.rm = T)),
+                              by=c('income_decile')]
+
+plot_income_density_deaths <- ggplot(deaths_income) +
+  geom_density(data = deaths_income, aes(x = deaths, group = income_decile,
+                              color = income_decile, fill = income_decile), 
+               linewidth = 0.8, alpha = 0.25) +
+  geom_vline(aes(color = income_decile, xintercept = medi),
+             data = deaths_elderly_medi, linewidth = 1) +
+  facet_wrap(. ~ income_decile, nrow = 5,
+             labeller = as_labeller(quintiles.labs)) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(values = quintiles.color,
+                    name = 'Income Quintiles [2015 PPP]',
+                    labels = quintiles.labs)+
+  scale_color_manual(values = quintiles.color,
+                     name = 'Income Quintiles [2015 PPP]',
+                     labels = quintiles.labs)+
+  labs(x = 'Premature deaths [NR]', y = 'Probability density') +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_line(colour = "grey90"),
+        panel.ontop = FALSE,
+        strip.text = element_text(size = 12),
+        strip.background = element_blank(),
+        axis.title.x = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        legend.key.size = unit(1.5, 'cm'),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom")
+
+ggsave(file='figures/plot_income_density_deaths.pdf', height = 30, width = 20, units = 'cm',
+       plot = plot_income_density_deaths)
+
+## DEATHS vs GINI ============================================================
+
+# check normality
+deaths_gini_sf <- sf::st_join(
+  harm_data_nuts3_sf %>% 
+    dplyr::select(geo, gini = Gini_nuts3, geometry),
+  deaths_nuts3_sf %>% 
+    dplyr::select(deaths, geometry)
+) %>% 
+  select(geo, gini, deaths, geometry)
+
+deaths_gini <- data.table::as.data.table(deaths_gini_sf) %>% 
+  select(-geometry) %>% 
+  filter(rowSums(is.na(.)) == 0) %>% 
+  # remove outliers(>95%)
+  filter(deaths <= quantile(deaths, probs = 0.95))
+
+# Histogram
+ggplot(deaths_gini, aes(x = deaths)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~ gini) %>% 
+  theme(legend.position = 'none')
+
+# Q-Q plot
+ggplot(deaths_gini, aes(sample = deaths)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~ gini) %>% 
+  theme(legend.position = 'none')
+
+# Anderson-Darling Test
+test <- nortest::ad.test(deaths_gini$deaths)
+# A = 4290.1, p-value < 2.2e-16 --> NOT normal distribution
+
+# Kruskal-Wallis Test (for >2 categories) - non parametric test
+test <- kruskal.test(deaths ~ gini, data = deaths_gini_sf)
+# Kruskal-Wallis chi-squared = 78734, df = 1146, p-value < 2.2e-16
+rstatix::kruskal_effsize(data = as.data.frame(deaths_gini_sf), deaths ~ gini)
+# .y.       n effsize method  magnitude
+# * <chr> <int>   <dbl> <chr>   <ord>    
+#   deaths 127198   0.616 eta2[H] large       
+# Result: the effect of the gini is SIGNIFICANT and LARGE
+
+
+
+deaths_gini <- deaths_gini %>% 
+  dplyr::mutate(gini_decile = as.factor(ntile(gini, 5)))
+
+deaths_elderly_medi <- deaths_gini[, .(medi = quantile(deaths, 0.5, na.rm = T)),
+                              by=c('gini_decile')]
+
+plot_gini_density_deaths <- ggplot(deaths_gini) +
+  geom_density(data = deaths_gini, aes(x = deaths, group = gini_decile,
+                              color = gini_decile, fill = gini_decile), 
+               linewidth = 0.8, alpha = 0.25) +
+  geom_vline(aes(color = gini_decile, xintercept = medi),
+             data = deaths_elderly_medi, linewidth = 1) +
+  facet_wrap(. ~ gini_decile, nrow = 5,
+             labeller = as_labeller(quintiles.labs)) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(values = quintiles.color,
+                    name = 'Gini Quintiles [Index]',
+                    labels = quintiles.labs)+
+  scale_color_manual(values = quintiles.color,
+                     name = 'Gini Quintiles [Index]',
+                     labels = quintiles.labs)+
+  labs(x = 'Premature deaths [NR]', y = 'Probability density') +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_line(colour = "grey90"),
+        panel.ontop = FALSE,
+        strip.text = element_text(size = 12),
+        strip.background = element_blank(),
+        axis.title.x = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        legend.key.size = unit(1.5, 'cm'),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom")
+
+ggsave(file='figures/plot_gini_density_deaths.pdf', height = 30, width = 20, units = 'cm',
+       plot = plot_gini_density_deaths)

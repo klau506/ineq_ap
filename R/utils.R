@@ -1,4 +1,53 @@
 
+compute_gini_by_nuts3 <- function(df) {
+  df %>%
+    dplyr::group_by(Year, geo) %>%
+    dplyr::summarise(
+      Population_T = sum(Population, na.rm = T),              # Total population of the BigRegion
+      Disp_Inc_P_T = sum(Population * Disp_Inc_P, na.rm = T) / sum(Population, na.rm = T), # Mean income of the BigRegion
+      G_W = sum((Population * Disp_Inc_P / sum(Population * Disp_Inc_P)) * Gini, na.rm = T), # Within-region Gini component
+      G_B = sum(outer(Population, Population) * abs(outer(Disp_Inc_P, Disp_Inc_P, "-"))) / (2 * sum(Population)^2 * (sum(Population * Disp_Inc_P) / sum(Population))),
+      Gini_nuts3 = G_W + G_B            # Total Gini index
+    ) %>%
+    dplyr::select(Year, geo, Gini_nuts3)
+}
+
+# Example usage
+df <- data.frame(
+  reg_id = c("A", "B", "C", "D", "E", "F"),
+  BigRegion = c("North", "North", "North", "South", "South", "South"),
+  G = c(0.3, 0.35, 0.32, 0.4, 0.45, 0.42),  # Regional Gini index
+  N = c(1000000, 500000, 300000, 800000, 400000, 200000),  # Population
+  Y = c(25000, 20000, 18000, 30000, 22000, 17000)  # Per capita income
+)
+
+# Compute overall Gini index per BigRegion
+gini_results <- compute_gini_by_bigregion(df)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #' map_plot
 #' 
 #' @param data data to plot

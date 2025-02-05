@@ -7,12 +7,12 @@ source('R/zzz.R')
 # ==============================================================================
 #                                  LOAD DATA                                   #
 # ==============================================================================
-## load dummy PM2.5 concentration & premature deaths by NUTS3
+## load dummy PM2.5 concentration & premature deaths by NUTS3 ==================
 ap <- get(load('data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData'))
 deaths <- get(load('data/rfasst_output/tmp_m3_get_mort_pm25.output.RData')) %>% 
   select(region, year, age, sex, disease, value = GBD, scenario)
 
-## load socioeconomic data
+## load socioeconomic data =====================================================
 new_colnames <- c('URBN_TYPE' = 'URBN_TY', 'geo' = 'geo', 'mean_per_elderly' = 'mn_pr_l',
                   'Year' = 'Year', 'ISO' = 'ISO', 'Population_nuts3' = 'Ppltn_3',
                   'Disp_Inc_P_nuts3' = 'D_I_P_3', 'Gini_nuts3' = 'Gn_nts3',
@@ -20,7 +20,7 @@ new_colnames <- c('URBN_TYPE' = 'URBN_TY', 'geo' = 'geo', 'mean_per_elderly' = '
 harm_socioeconomic_nuts_sf <- sf::st_read("data/tmp/harm_socioeconomic_nuts_sf.shp") %>% 
   dplyr::rename(new_colnames)
 
-## load spacial data
+## load spacial data ===========================================================
 nuts3_plot_data <- get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>% 
   dplyr::select(-FID)
 
@@ -101,7 +101,9 @@ tmap::tmap_save(plot_deaths, filename = "figures/plot_deaths.pdf",
 ## AP vs URBN_TYPE  ============================================================
 # check normality
 ap_urbntype_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf,
+  harm_socioeconomic_nuts_sf %>% 
+    dplyr::select(geo, URBN_TYPE, geometry) %>% 
+    dplyr::filter(rowSums(is.na(.)) == 0),
   ap_nuts3_sf %>% 
     dplyr::select(-URBN_TYPE, -geo)
 ) %>% 
@@ -175,7 +177,9 @@ ggsave(file='figures/plot_urbntype_density_ap.pdf', height = 15, width = 15, uni
 
 # check normality
 ap_elderly_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf,
+  harm_socioeconomic_nuts_sf %>% 
+    dplyr::select(geo, mean_per_elderly, geometry) %>% 
+    dplyr::filter(rowSums(is.na(.)) == 0),
   ap_nuts3_sf %>% 
     dplyr::select(ap, geometry)
 ) %>% 
@@ -253,7 +257,9 @@ ggsave(file='figures/plot_elderly_density_ap.pdf', height = 30, width = 20, unit
 
 # check normality
 deaths_urbntype_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf,
+  harm_socioeconomic_nuts_sf %>% 
+    dplyr::select(geo, URBN_TYPE, geometry) %>% 
+    dplyr::filter(rowSums(is.na(.)) == 0),
   deaths_nuts3_sf %>% 
     dplyr::select(deaths, geometry)
 ) %>% 
@@ -262,8 +268,8 @@ deaths_urbntype_sf <- sf::st_join(
 deaths_urbntype <- data.table::as.data.table(deaths_urbntype_sf) %>% 
   select(-geometry) %>% 
   filter(rowSums(is.na(.)) == 0) %>% 
-  # remove outliers(>90%)
-  filter(deaths <= quantile(deaths, probs = 0.90))
+  # remove outliers(>95%)
+  filter(deaths <= quantile(deaths, probs = 0.95))
 
 # Histogram
 ggplot(deaths_urbntype, aes(x = deaths)) +
@@ -330,7 +336,9 @@ ggsave(file='figures/plot_urbntype_density_deaths.pdf', height = 30, width = 20,
 
 # check normality
 deaths_cdd_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf,
+  harm_socioeconomic_nuts_sf %>% 
+    dplyr::select(geo, CDD, geometry) %>% 
+    dplyr::filter(rowSums(is.na(.)) == 0),
   deaths_nuts3_sf %>% 
     dplyr::select(deaths, geometry)
 ) %>% 
@@ -338,7 +346,9 @@ deaths_cdd_sf <- sf::st_join(
 
 deaths_cdd <- data.table::as.data.table(deaths_cdd_sf) %>% 
   select(-geometry) %>% 
-  filter(rowSums(is.na(.)) == 0)
+  filter(rowSums(is.na(.)) == 0) %>% 
+  # remove outliers(>95%)
+  filter(deaths <= quantile(deaths, probs = 0.95))
 
 # Histogram
 ggplot(deaths_cdd, aes(x = deaths)) +
@@ -406,7 +416,9 @@ ggsave(file='figures/plot_cdd_density_deaths.pdf', height = 30, width = 20, unit
 
 # check normality
 deaths_elderly_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf,
+  harm_socioeconomic_nuts_sf %>% 
+    dplyr::select(geo, mean_per_elderly, geometry) %>% 
+    dplyr::filter(rowSums(is.na(.)) == 0),
   deaths_nuts3_sf %>% 
     dplyr::select(deaths, geometry)
 ) %>% 
@@ -415,8 +427,8 @@ deaths_elderly_sf <- sf::st_join(
 deaths_elderly <- data.table::as.data.table(deaths_elderly_sf) %>% 
   select(-geometry) %>% 
   filter(rowSums(is.na(.)) == 0) %>% 
-  # remove outliers(>90%)
-  filter(deaths <= quantile(deaths, probs = 0.90))
+  # remove outliers(>95%)
+  filter(deaths <= quantile(deaths, probs = 0.95))
 
 # Histogram
 ggplot(deaths_elderly, aes(x = deaths)) +
@@ -488,7 +500,8 @@ ggsave(file='figures/plot_elderly_density_deaths.pdf', height = 30, width = 20, 
 # check normality
 deaths_income_sf <- sf::st_join(
   harm_socioeconomic_nuts_sf %>% 
-    dplyr::select(geo, income = Disp_Inc_P_nuts3, geometry),
+    dplyr::select(geo, income = Disp_Inc_P_nuts3, geometry) %>% 
+    dplyr::filter(rowSums(is.na(.)) == 0),
   deaths_nuts3_sf %>% 
     dplyr::select(deaths, geometry)
 ) %>% 
@@ -570,7 +583,8 @@ ggsave(file='figures/plot_income_density_deaths.pdf', height = 30, width = 20, u
 # check normality
 deaths_gini_sf <- sf::st_join(
   harm_socioeconomic_nuts_sf %>% 
-    dplyr::select(geo, gini = Gini_nuts3, geometry),
+    dplyr::select(geo, gini = Gini_nuts3, geometry) %>% 
+    dplyr::filter(rowSums(is.na(.)) == 0),
   deaths_nuts3_sf %>% 
     dplyr::select(deaths, geometry)
 ) %>% 

@@ -131,22 +131,35 @@ sf::st_write(harm_data_sf, "data/tmp/harm_data_sf.shp", append = FALSE)
 # ==============================================================================
 
 #### DISPOSABLE INCOME & GINI ==================================================
-harm_data_nuts3 <- data.table::as.data.table(harm_data) %>% 
+harm_data_income_nuts3 <- data.table::as.data.table(harm_data) %>% 
   dplyr::mutate(Id = row_number()) %>% 
-  dplyr::select(Id, Year, ISO, geo, Population, Disp_Inc_P, Gini) %>% 
+  dplyr::select(Id, Year, ISO, geo, Population, Disp_Inc_P) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0) %>% 
   # pop-weighted disposable income: 
   # Disp_Inc_P_nuts3 = SUM_regInNUTS3(Pop * Disp_Inc_P) / SUM_regInNUTS3(Pop)
   dplyr::mutate(Disp_Inc_P_pw = Disp_Inc_P * Population) %>% 
   dplyr::group_by(Year, geo, ISO) %>% 
-  dplyr::mutate(Population_nuts3 = sum(Population, na.rm = T)) %>% 
-  dplyr::mutate(Disp_Inc_P_nuts3 = sum(Disp_Inc_P_pw, na.rm = T) / Population_nuts3) %>% 
+  dplyr::mutate(Population_nuts3 = sum(Population)) %>% 
+  dplyr::mutate(Disp_Inc_P_nuts3 = sum(Disp_Inc_P_pw) / Population_nuts3) %>% 
   dplyr::ungroup() %>% 
+  dplyr::select(Year, ISO, geo, Population_nuts3, Disp_Inc_P_nuts3) %>% 
+  dplyr::distinct()
+  
+harm_data_gini_nuts3 <- data.table::as.data.table(harm_data) %>% 
+  dplyr::mutate(Id = row_number()) %>% 
+  dplyr::select(Id, Year, ISO, geo, Population, Disp_Inc_P, Gini) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+  tibble::as_tibble() %>% 
   # weighted gini index: 
   gcamdata::left_join_error_no_match(compute_gini_by_nuts3(.),
                                      by = c('Year', 'geo')) %>% 
-  dplyr::select(Year, ISO, geo, Population_nuts3, Disp_Inc_P_nuts3, Gini_nuts3) %>% 
+  dplyr::select(Year, ISO, geo, Gini_nuts3) %>% 
   dplyr::distinct()
+
+harm_data_nuts3 <- dplyr::full_join(
+  harm_data_income_nuts3,
+  harm_data_gini_nuts3
+)
 
 harm_data_nuts3_sf <- harm_data_nuts3 %>% 
   dplyr::left_join(nuts3_plot_data %>% 
@@ -161,7 +174,9 @@ plot_income <- tm_shape(nuts3_plot_data,
                         ylim = c(1320000, 5650000)
 ) +
   tm_fill("lightgrey") +
-  tm_shape(harm_data_nuts3_sf) +
+  tm_shape(harm_data_nuts3_sf %>% 
+             dplyr::select(Disp_Inc_P_nuts3, geometry) %>% 
+             dplyr::filter(rowSums(is.na(.)) == 0)) +
   tm_polygons("Disp_Inc_P_nuts3",
               title = "Disposable Income\n[2015 PPP EU27 €]",
               palette = "Oranges",
@@ -179,7 +194,9 @@ plot_gini <- tm_shape(nuts3_plot_data,
                       ylim = c(1320000, 5650000)
 ) +
   tm_fill("lightgrey") +
-  tm_shape(harm_data_nuts3_sf) +
+  tm_shape(harm_data_nuts3_sf %>% 
+             dplyr::select(Gini_nuts3, geometry) %>% 
+             dplyr::filter(rowSums(is.na(.)) == 0)) +
   tm_polygons("Gini_nuts3",
               title = "Gini\nIndex",
               palette = "Oranges",

@@ -1,4 +1,7 @@
 
+#' compute_gini_by_nuts3
+#' 
+#' @param df dataset with Year, geo, Population, Disp_Inc_P, and Gini columns 
 compute_gini_by_nuts3 <- function(df) {
   df %>%
     dplyr::group_by(Year, geo) %>%
@@ -11,40 +14,6 @@ compute_gini_by_nuts3 <- function(df) {
     ) %>%
     dplyr::select(Year, geo, Gini_nuts3)
 }
-
-# Example usage
-df <- data.frame(
-  reg_id = c("A", "B", "C", "D", "E", "F"),
-  BigRegion = c("North", "North", "North", "South", "South", "South"),
-  G = c(0.3, 0.35, 0.32, 0.4, 0.45, 0.42),  # Regional Gini index
-  N = c(1000000, 500000, 300000, 800000, 400000, 200000),  # Population
-  Y = c(25000, 20000, 18000, 30000, 22000, 17000)  # Per capita income
-)
-
-# Compute overall Gini index per BigRegion
-gini_results <- compute_gini_by_bigregion(df)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

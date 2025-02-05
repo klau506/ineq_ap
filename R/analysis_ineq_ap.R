@@ -5,12 +5,16 @@ library(tmap)
 source("R/utils.R")
 source("R/zzz.R")
 
+normalized <- F
+
 # ==============================================================================
 #                                  LOAD DATA                                   #
 # ==============================================================================
+normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
+
 ## load dummy PM2.5 concentration & premature deaths by NUTS3 ==================
 ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData"))
-deaths <- get(load("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData")) %>%
+deaths <- get(load(paste0("data/rfasst_output/tmp_m3_get_mort_pm25.output", normalized_tag, ".RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario)
 
 ## load socioeconomic data =====================================================
@@ -65,7 +69,7 @@ plot_ap <- tm_shape(nuts3_plot_data,
   tm_layout(legend.text.size = 0.6)
 
 tmap::tmap_save(plot_ap,
-  filename = "figures/plot_ap.pdf",
+  filename = paste0("figures/plot_ap", normalized_tag, ".pdf"),
   width = 100, height = 100, units = "mm", dpi = 300
 )
 
@@ -110,7 +114,7 @@ plot_deaths <- tm_shape(nuts3_plot_data,
   tm_layout(legend.text.size = 0.6)
 
 tmap::tmap_save(plot_deaths,
-  filename = "figures/plot_deaths.pdf",
+  filename = paste0("figures/plot_deaths", normalized_tag, ".pdf"),
   width = 100, height = 100, units = "mm", dpi = 300
 )
 
@@ -200,7 +204,7 @@ plot_urbntype_density <- ggplot(df) +
   )
 
 ggsave(
-  file = "figures/plot_urbntype_density_ap.pdf", height = 15, width = 15, units = "cm",
+  file = paste0("figures/plot_urbntype_density_ap", normalized_tag, ".pdf"), height = 15, width = 15, units = "cm",
   plot = plot_urbntype_density
 )
 
@@ -296,7 +300,7 @@ plot_elderly_density <- ggplot(ap_elderly) +
   )
 
 ggsave(
-  file = "figures/plot_elderly_density_ap.pdf", height = 30, width = 20, units = "cm",
+  file = paste0("figures/plot_elderly_density_ap", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
   plot = plot_elderly_density
 )
 
@@ -391,7 +395,7 @@ plot_urbntype_density_deaths <- ggplot(deaths_urbntype) +
   )
 
 ggsave(
-  file = "figures/plot_urbntype_density_deaths.pdf", height = 30, width = 20, units = "cm",
+  file = paste0("figures/plot_urbntype_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
   plot = plot_urbntype_density_deaths
 )
 
@@ -487,7 +491,7 @@ plot_cdd_density_deaths <- ggplot(deaths_cdd) +
   )
 
 ggsave(
-  file = "figures/plot_cdd_density_deaths.pdf", height = 30, width = 20, units = "cm",
+  file = paste0("figures/plot_cdd_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
   plot = plot_cdd_density_deaths
 )
 
@@ -586,7 +590,7 @@ plot_elderly_density_deaths <- ggplot(deaths_elderly) +
   )
 
 ggsave(
-  file = "figures/plot_elderly_density_deaths.pdf", height = 30, width = 20, units = "cm",
+  file = paste0("figures/plot_elderly_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
   plot = plot_elderly_density_deaths
 )
 
@@ -685,7 +689,7 @@ plot_income_density_deaths <- ggplot(deaths_income) +
   )
 
 ggsave(
-  file = "figures/plot_income_density_deaths.pdf", height = 30, width = 20, units = "cm",
+  file = paste0("figures/plot_income_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
   plot = plot_income_density_deaths
 )
 
@@ -784,6 +788,6 @@ plot_gini_density_deaths <- ggplot(deaths_gini) +
   )
 
 ggsave(
-  file = "figures/plot_gini_density_deaths.pdf", height = 30, width = 20, units = "cm",
+  file = paste0("figures/plot_gini_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
   plot = plot_gini_density_deaths
 )

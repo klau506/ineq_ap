@@ -326,6 +326,82 @@ plot_urbntype_density_deaths <- ggplot(deaths_urbntype) +
 ggsave(file='figures/plot_urbntype_density_deaths.pdf', height = 30, width = 20, units = 'cm',
        plot = plot_urbntype_density_deaths)
 
+## DEATHS vs CDD ===========================================================
+
+# check normality
+deaths_cdd_sf <- sf::st_join(
+  harm_socioeconomic_nuts_sf,
+  deaths_nuts3_sf %>% 
+    dplyr::select(deaths, geometry)
+) %>% 
+  select(geo, cdd = CDD, deaths, geometry)
+
+deaths_cdd <- data.table::as.data.table(deaths_cdd_sf) %>% 
+  select(-geometry) %>% 
+  filter(rowSums(is.na(.)) == 0)
+
+# Histogram
+ggplot(deaths_cdd, aes(x = deaths)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  theme(legend.position = 'none')
+
+# Q-Q plot
+ggplot(deaths_cdd, aes(sample = deaths)) +
+  stat_qq() +
+  stat_qq_line() +
+  theme(legend.position = 'none')
+
+# Anderson-Darling Test
+test <- nortest::ad.test(deaths_cdd$deaths)
+# A = 15155, p-value < 2.2e-16 (all data) --> NOT normal distribution
+
+# Kruskal-Wallis Test (for >2 categories) - non parametric test
+test <- kruskal.test(deaths ~ cdd, data = deaths_cdd_sf)
+# Kruskal-Wallis chi-squared = 52418, df = 1016, p-value < 2.2e-16 (all data)
+rstatix::kruskal_effsize(data = as.data.frame(deaths_cdd_sf), deaths ~ cdd)
+# .y.       n effsize method  magnitude
+# * <chr> <int>   <dbl> <chr>   <ord>    
+#   deaths 144454   0.358 eta2[H] large    
+# Result: the effect of the cdd is SIGNIFICANT and LARGE
+
+
+deaths_cdd <- deaths_cdd %>% 
+  dplyr::mutate(mean_cdd_decile = as.factor(ntile(cdd, 5)))
+
+deaths_cdd_medi <- deaths_cdd[, .(medi = quantile(deaths, 0.5, na.rm = T)),
+                              by=c('mean_cdd_decile')]
+
+plot_cdd_density_deaths <- ggplot(deaths_cdd) +
+  geom_density(data = deaths_cdd, aes(x = deaths, group = mean_cdd_decile,
+                              color = mean_cdd_decile, fill = mean_cdd_decile), 
+               linewidth = 0.8, alpha = 0.25) +
+  geom_vline(aes(color = mean_cdd_decile, xintercept = medi),
+             data = deaths_cdd_medi, linewidth = 1) +
+  facet_wrap(. ~ mean_cdd_decile, nrow = 5,
+             labeller = as_labeller(quintiles.labs)) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(values = quintiles.color,
+                    name = 'CDD [NR]',
+                    labels = quintiles.labs)+
+  scale_color_manual(values = quintiles.color,
+                     name = 'CDD [NR]',
+                     labels = quintiles.labs)+
+  labs(x = 'Premature deaths [NR]', y = 'Probability density') +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_line(colour = "grey90"),
+        panel.ontop = FALSE,
+        strip.text = element_text(size = 12),
+        strip.background = element_blank(),
+        axis.title.x = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        legend.key.size = unit(1.5, 'cm'),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom")
+
+ggsave(file='figures/plot_cdd_density_deaths.pdf', height = 30, width = 20, units = 'cm',
+       plot = plot_cdd_density_deaths)
+
 ## DEATHS vs ELDERLY ===========================================================
 
 # check normality

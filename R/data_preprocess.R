@@ -25,7 +25,7 @@ sf::st_write(nuts3_plot_data, "data/Replication data/Global_Inputs/nuts3_plot_da
          layer_options = "ENCODING=UTF-8")
 
 
-#### eurostat nuts3 data NOT USED - TO BE DELETED ==============================
+#### eurostat nuts3 data - ONLY HDD-CDD USED ===================================
 ## read socioeconomic data
 gdp <- eurostat::get_eurostat('nama_10r_3gdp') %>% # gdp NUTS3
   dplyr::filter(unit == 'PPS_EU27_2020_HAB') %>% # Purchasing power standard (PPS, EU27 from 2020), per inhabitant
@@ -71,6 +71,15 @@ gva_act <- eurostat::get_eurostat('nama_10r_3gva') # gross value added by act NU
 # pop_fhcs <- eurostat::get_eurostat('cens_21fhcs_r3') # pop_detailed NUTS3
 income <- eurostat::get_eurostat('nama_10r_2hhinc') # income NUTS2 na_item == 'B6N'
 # poverty <- eurostat::get_eurostat('ilc_peps11n') # poverty NUTS2
+
+
+hdd_cdd_sf <- data.table::as.data.table(hdd_cdd) %>% 
+  dplyr::left_join(nuts3_plot_data %>% 
+                     dplyr::select(geo, geometry),
+                   by = 'geo')
+hdd_cdd_sf <- sf::st_sf(hdd_cdd_sf, geometry = hdd_cdd_sf$geometry)
+sf::st_write(hdd_cdd_sf, "data/tmp/hdd_cdd_sf.shp", append = FALSE)
+
 
 
 #### eurostat grided data ======================================================
@@ -265,6 +274,36 @@ tmap::tmap_save(plot_urbtype, filename = "figures/plot_urbtype.pdf",
                 width = 100, height = 100, units = 'mm', dpi = 300)
 
 
+#### CDD (very hot days when cooling is needed) ================================
+
+grid_sf_cdd_v2 <- hdd_cdd %>%   
+  dplyr::filter(nchar(geo) == 5) %>% # only NUTS3
+  dplyr::select(-starts_with('unit')) %>% 
+  dplyr::left_join(nuts3_plot_data %>% 
+                   dplyr::select(geo, geometry),
+                 by = 'geo')
+grid_sf_cdd_v2 <- sf::st_sf(grid_sf_cdd_v2, geometry = grid_sf_cdd_v2$geometry)
+
+
+plot_cdd <- tm_shape(nuts3_plot_data,
+                         projection = "EPSG:3035",
+                         xlim = c(2400000, 6500000),
+                         ylim = c(1320000, 5650000)
+) +
+  tm_fill("lightgrey") +
+  tm_shape(grid_sf_cdd_v2) +
+  tm_polygons("CDD",
+              title = "CDD [NR]",
+              palette = "Oranges",
+              style = "cont"
+  ) +
+  tm_layout(legend.title.size = 0.8) +
+  tm_layout(legend.text.size = 0.6)
+
+tmap::tmap_save(plot_cdd, filename = "figures/plot_cdd.pdf",
+                width = 100, height = 100, units = 'mm', dpi = 300)
+
+
 
 # ==============================================================================
 #                                   JOIN DATA                                  #
@@ -275,9 +314,11 @@ tmap::tmap_save(plot_urbtype, filename = "figures/plot_urbtype.pdf",
 
 harm_socioeconomic_nuts_sf <- data.table::as.data.table(grid_sf_urbntype_v2) %>%
   dplyr::select(-geometry) %>%
-  dplyr::left_join(data.table::as.data.table(grid_sf_elderly_v3) %>% 
+  dplyr::full_join(data.table::as.data.table(grid_sf_cdd_v2) %>% 
+                     dplyr::select(-geometry), by = "geo") %>% 
+  dplyr::full_join(data.table::as.data.table(grid_sf_elderly_v3) %>% 
               dplyr::select(-geometry), by = "geo") %>%
-  dplyr::left_join(data.table::as.data.table(harm_data_nuts3_sf) %>% 
+  dplyr::full_join(data.table::as.data.table(harm_data_nuts3_sf) %>% 
               dplyr::select(-geometry), by = "geo") %>% 
   # merge with NUTS3 geometries
   dplyr::left_join(nuts3_plot_data %>% 
@@ -286,5 +327,3 @@ harm_socioeconomic_nuts_sf <- data.table::as.data.table(grid_sf_urbntype_v2) %>%
 harm_socioeconomic_nuts_sf <- sf::st_sf(harm_socioeconomic_nuts_sf, geometry = harm_socioeconomic_nuts_sf$geometry)
 
 sf::st_write(harm_socioeconomic_nuts_sf, "data/tmp/harm_socioeconomic_nuts_sf.shp", append = FALSE)
-
-  

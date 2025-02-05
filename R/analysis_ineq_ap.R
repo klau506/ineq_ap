@@ -249,6 +249,83 @@ plot_elderly_density <- ggplot(ap_elderly) +
 ggsave(file='figures/plot_elderly_density_ap.pdf', height = 30, width = 20, units = 'cm',
        plot = plot_elderly_density)
 
+## DEATHS vs URBN_TYPE ===========================================================
+
+# check normality
+deaths_urbntype_sf <- sf::st_join(
+  harm_socioeconomic_nuts_sf,
+  deaths_nuts3_sf %>% 
+    dplyr::select(deaths, geometry)
+) %>% 
+  select(geo, URBN_TYPE, deaths, geometry)
+
+deaths_urbntype <- data.table::as.data.table(deaths_urbntype_sf) %>% 
+  select(-geometry) %>% 
+  filter(rowSums(is.na(.)) == 0) %>% 
+  # remove outliers(>90%)
+  filter(deaths <= quantile(deaths, probs = 0.90))
+
+# Histogram
+ggplot(deaths_urbntype, aes(x = deaths)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~ URBN_TYPE) %>% 
+  theme(legend.position = 'none')
+
+# Q-Q plot
+ggplot(deaths_urbntype, aes(sample = deaths)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~ URBN_TYPE) %>% 
+  theme(legend.position = 'none')
+
+# Anderson-Darling Test
+test <- nortest::ad.test(deaths_urbntype$deaths)
+# A = 3364.5, p-value < 2.2e-16 --> NOT normal distribution
+
+# Kruskal-Wallis Test (for >2 categories) - non parametric test
+test <- kruskal.test(deaths ~ URBN_TYPE, data = deaths_urbntype_sf)
+# Kruskal-Wallis chi-squared = 5273.1, df = 2, p-value < 2.2e-16
+rstatix::kruskal_effsize(data = as.data.frame(deaths_urbntype_sf), deaths ~ URBN_TYPE)
+# .y.       n effsize method  magnitude
+# * <chr> <int>   <dbl> <chr>   <ord>    
+#   deaths 127621  0.0413 eta2[H] small    
+# Result: the effect of the URBN_TYPE is SIGNIFICANT and SMALL
+
+
+deaths_urbntype_medi <- deaths_urbntype[, .(medi = quantile(deaths, 0.5, na.rm = T)),
+                              by=c('URBN_TYPE')] 
+
+plot_urbntype_density_deaths <- ggplot(deaths_urbntype) +
+  geom_density(data = deaths_urbntype, aes(x = deaths, group = URBN_TYPE,
+                              color = URBN_TYPE, fill = URBN_TYPE), 
+               linewidth = 0.8, alpha = 0.25) +
+  geom_vline(aes(color = URBN_TYPE, xintercept = medi),
+             data = deaths_urbntype_medi, linewidth = 1) +
+  facet_wrap(. ~ URBN_TYPE, nrow = 5,
+             labeller = as_labeller(urbn_type.labs)) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(values = urbn_type.color,
+                    name = 'Urban type',
+                    labels = urbn_type.labs)+
+  scale_color_manual(values = urbn_type.color,
+                     name = 'Urban type',
+                     labels = urbn_type.labs)+
+  labs(x = 'Premature deaths [NR]', y = 'Probability density') +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_line(colour = "grey90"),
+        panel.ontop = FALSE,
+        strip.text = element_text(size = 12),
+        strip.background = element_blank(),
+        axis.title.x = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        legend.key.size = unit(1.5, 'cm'),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom")
+
+ggsave(file='figures/plot_urbntype_density_deaths.pdf', height = 30, width = 20, units = 'cm',
+       plot = plot_urbntype_density_deaths)
+
 ## DEATHS vs ELDERLY ===========================================================
 
 # check normality

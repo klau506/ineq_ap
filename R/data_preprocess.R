@@ -1,4 +1,5 @@
 require(eurostat)
+require(eurostat)
 require(sf)
 library(tmap)
 
@@ -8,13 +9,6 @@ source("R/zzz.R")
 # ==============================================================================
 #                                  LOAD DATA                                   #
 # ==============================================================================
-
-#### rfasst output =============================================================
-## load dummy PM2.5 concentration & premature deaths by NUTS3
-ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData"))
-deaths <- get(load("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData")) %>%
-  dplyr::select(region, year, age, sex, disease, value = GBD, scenario)
-
 
 #### spacial data ==============================================================
 ## spacial data for plots
@@ -52,9 +46,9 @@ hdd_cdd <- eurostat::get_eurostat("nrg_chddr2_a") %>% # HDD & CDD NUTS3
   ) %>%
   dplyr::select(geo, CDD, HDD, unit_CDD, unit_HDD)
 
-grid_dt <- eurostat::get_eurostat_geospatial(year = 2021) %>% # 2024 available, but not for URBN_TYPE, which will not change much from 2021 to 2024
+grid_dt <- eurostat::get_eurostat_geospatial(year = 2021) %>% # 2024 available, but not for urbn_type, which will not change much from 2021 to 2024
   as.data.frame() %>%
-  dplyr::select(LEVL_CODE, NUTS_ID, CNTR_CODE, URBN_TYPE, geo)
+  dplyr::select(LEVL_CODE, NUTS_ID, CNTR_CODE, urbn_type, geo)
 
 
 socioecon_dt <- purrr::reduce(
@@ -87,20 +81,24 @@ sf::st_write(hdd_cdd_sf, "data/tmp/hdd_cdd_sf.shp", append = FALSE)
 
 
 
-#### eurostat grided data ======================================================
-# Source: https://ec.europa.eu/eurostat/web/gisco/geodata/population-distribution/geostat
-# grided socioeconomic data from EUROSTAT - people by age & sex
-temp_dir <- tempdir()
-unzip("data/Eurostat_Census-GRID_2021_V2.1.zip", exdir = temp_dir)
-eur_data <- sf::st_read(file.path(temp_dir, "ESTAT_Census_2021_V2.gpkg"))
-eur_data <- eur_data %>%
-  dplyr::select(-ends_with("_CI")) %>%
-  dplyr::filter(Y_GE65 >= 0, T >= 0) # avoid wired cell values
+#### rfasst population data ====================================================
+# Source: rfasst pkg, dev_k branch
+rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
+  dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
+  dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
+save(rfasst_pop, file = "data/tmp/rfasst_pop.RData")
 
-# merge socioeconomic gridded data with NUTS3 regions
-grid_eur_sf <- sf::st_transform(eur_data, crs = st_crs(nuts3_plot_data))
-grid_eur_sf_nuts3 <- sf::st_join(grid_eur_sf, nuts3_plot_data, join = st_intersects)
-sf::st_write(grid_eur_sf_nuts3, "data/tmp/grid_eur_sf_nuts3.shp", append = FALSE)
+
+#### eurostat urbn-type data ===================================================
+# Source: https://ec.europa.eu/eurostat/web/rural-development/methodology, NUTS-2021
+urbn_type <- xlsx::read.xlsx('data/NUTS2021.xlsx', sheetName = 'Urban-rural') %>% 
+  dplyr::select(geo = NUTS_ID, urbn_type = URBAN.RURAL.CATEGORY.) %>% 
+  dplyr::distinct() %>% 
+  dplyr::mutate(urbn_type = factor(urbn_type,
+                                   levels = c(1, 2, 3),
+                                   labels = c("City", "Town/Suburb", "Rural")
+  ))
+save(urbn_type, file = "data/tmp/urbn_type.RData")
 
 
 #### harmonized income data ====================================================
@@ -109,7 +107,20 @@ harm_data <- sf::st_read("data/Replication data/merged_output_2019_wID_clean.shp
   dplyr::mutate(
     Population = as.numeric(Population),
     Gini = as.numeric(Gini)
-  )
+  ) %>% 
+  # fix minor NUTS - ISO pairs
+  dplyr::filter(!(NUTS_ID == 'FRF12' & AU_code == 2774 & CNTR_CODE == 'FR')) %>% 
+  dplyr::mutate(NUTS_ID = dplyr::if_else(NUTS_ID == 'FRF12' & AU_code == 2774, 'CH032', NUTS_ID)) %>% 
+  dplyr::filter(!(NUTS_ID == 'FRK28' & AU_code == 6625 & CNTR_CODE == 'FR')) %>% 
+  dplyr::mutate(NUTS_ID = dplyr::if_else(NUTS_ID == 'FRK28' & AU_code == 6625, 'CH013', NUTS_ID)) %>% 
+  dplyr::filter(!(NUTS_ID == 'FRI15' & AU_code == 2004502004 & CNTR_CODE == 'FR')) %>% 
+  dplyr::mutate(NUTS_ID = dplyr::if_else(NUTS_ID == 'FRI15' & AU_code == 2004502004, 'ES212', NUTS_ID)) %>% 
+  dplyr::filter(!(NUTS_ID == 'BE328' & AU_code == 590170201 & CNTR_CODE %in% c('BE',NA))) %>% 
+  dplyr::mutate(NUTS_ID = dplyr::if_else(NUTS_ID == 'BE328' & AU_code == 590170201, 'FRE11', NUTS_ID)) %>% 
+  dplyr::filter(!(NUTS_ID == 'ITC41' & AU_code == 5213 & CNTR_CODE == 'CH')) %>% 
+  dplyr::mutate(NUTS_ID = dplyr::if_else(NUTS_ID == 'ITC41' & AU_code == 5213, 'ITC41', NUTS_ID)) %>% 
+  dplyr::mutate(ISO = dplyr::if_else(NUTS_ID == 'ITC41' & AU_code == 5213, 'ITA', ISO))
+
 
 # check mismatched data (harmonized socioeconomic data NUTS3 code does not match the corresponding CTRY)
 iso2_iso3 <- rfasst::ctry_nuts3_codes %>%
@@ -121,13 +132,16 @@ harm_data_repair <- data.table::as.data.table(harm_data) %>%
   dplyr::left_join(iso2_iso3,
     by = c("ISO" = "ISO3")
   ) %>%
-  dplyr::left_join(iso_nuts2 = ISO2) %>%
+  dplyr::rename(iso_nuts2 = ISO2) %>%
   dplyr::mutate(geo_nuts2 = stringr::str_sub(NUTS_ID, 1, 2)) %>%
   dplyr::mutate(equal = iso_nuts2 == geo_nuts2) %>%
-  dplyr::filter(!equal) # OK!!
+  dplyr::filter(!equal)
 
-harm_data_sf <- data.table::as.data.table(harm_data) %>%
-  dplyr::select(-geometry) %>%
+if(nrow(harm_data_repair) != 0) {
+  stop('There is a mismatch between NUTS3 and ISO3 codes. Check the `merged_output_2019_wID_clean.shp` dataset.')
+}
+
+harm_data_sf <- data.table::as.data.table(harm_data_repair) %>%
   dplyr::left_join(
     nuts3_plot_data %>%
       dplyr::select(geo, geometry),
@@ -142,8 +156,7 @@ sf::st_write(harm_data_sf, "data/tmp/harm_data_sf.shp", append = FALSE)
 
 #### DISPOSABLE INCOME & GINI ==================================================
 harm_data_income_nuts3 <- data.table::as.data.table(harm_data) %>%
-  dplyr::mutate(Id = row_number()) %>%
-  dplyr::select(Id, Year, ISO, geo, Population, Disp_Inc_P) %>%
+  dplyr::select(Year, ISO, geo = NUTS_ID, Population, Disp_Inc_P) %>%
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
   # pop-weighted disposable income:
   # Disp_Inc_P_nuts3 = SUM_regInNUTS3(Pop * Disp_Inc_P) / SUM_regInNUTS3(Pop)
@@ -156,8 +169,7 @@ harm_data_income_nuts3 <- data.table::as.data.table(harm_data) %>%
   dplyr::distinct()
 
 harm_data_gini_nuts3 <- data.table::as.data.table(harm_data) %>%
-  dplyr::mutate(Id = row_number()) %>%
-  dplyr::select(Id, Year, ISO, geo, Population, Disp_Inc_P, Gini) %>%
+  dplyr::select(Year, ISO, geo = NUTS_ID, Population, Disp_Inc_P, Gini) %>%
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
   tibble::as_tibble() %>%
   # weighted gini index:
@@ -230,31 +242,25 @@ tmap::tmap_save(plot_gini,
 
 #### ELDERLY POPULATION (%) ====================================================
 # compute Y_GE65 (elderly people) percentage by NUTS3 region
-grid_sf_elderly_v2 <- as.data.frame(grid_eur_sf_nuts3) %>%
-  dplyr::filter(T > 0, Y_GE65 >= 0) %>%
-  dplyr::select(GRD_ID, Y_GE65, Y_TOT = T, geo)
-
-grid_sf_elderly_v3 <- unique(grid_sf_elderly_v2) %>%
-  dplyr::group_by(geo) %>%
-  dplyr::summarise(
-    Y_GE65 = sum(Y_GE65),
-    Y_TOT = sum(Y_TOT)
-  ) %>%
+old_age <- c("65-69", "70-74", "75-79", "80-84", "85-89", "90-94", "95+")
+grid_sf_elderly_v2 <- as.data.frame(rfasst_pop) %>%
+  dplyr::mutate(Y_GE65_bool = dplyr::if_else(age %in% old_age, T, F)) %>% 
+  dplyr::group_by(geo, year, sex) %>% 
+  dplyr::summarise(Y_GE65 = sum(dplyr::if_else(Y_GE65_bool, pop, 0)),
+                   Y_TOT = sum(pop)) %>% 
   dplyr::ungroup() %>%
-  dplyr::mutate(per_elderly = ifelse(!is.na(Y_GE65), Y_GE65 / Y_TOT, NA_real_)) %>%
-  dplyr::group_by(geo) %>%
-  dplyr::summarise(mean_per_elderly = mean(per_elderly, na.rm = TRUE)) %>%
-  dplyr::ungroup() %>%
-  as.data.frame() %>%
+  dplyr::mutate(per_elderly = Y_GE65 / Y_TOT) %>%
+  as.data.frame()
   # merge with NUTS3 geometries
-  dplyr::filter(rowSums(is.na(.)) == 0) %>%
-  dplyr::left_join(
-    nuts3_plot_data %>%
-      dplyr::select(geo, geometry),
-    by = "geo"
-  )
-
-grid_sf_elderly_v3 <- sf::st_sf(grid_sf_elderly_v3, geometry = grid_sf_elderly_v3$geometry)
+grid_sf_elderly_v2 <- nuts3_plot_data %>%
+    dplyr::select(geo, geometry) %>% 
+    dplyr::left_join(
+      grid_sf_elderly_v2,
+      by = "geo"
+      ) %>% 
+    dplyr::filter(rowSums(is.na(.)) == 0)
+      
+grid_sf_elderly_v2 <- sf::st_sf(grid_sf_elderly_v2, geometry = grid_sf_elderly_v2$geometry)
 
 plot_elderly <- tm_shape(nuts3_plot_data,
   projection = "EPSG:3035",
@@ -262,8 +268,9 @@ plot_elderly <- tm_shape(nuts3_plot_data,
   ylim = c(1320000, 5650000)
 ) +
   tm_fill("lightgrey") +
-  tm_shape(grid_sf_elderly_v3) +
-  tm_polygons("mean_per_elderly",
+  tm_shape(grid_sf_elderly_v2 %>% 
+             dplyr::filter(year == 2020, sex == 'Both')) +
+  tm_polygons("per_elderly",
     title = "Elderly people [%]",
     palette = "Oranges",
     style = "cont"
@@ -281,13 +288,9 @@ tmap::tmap_save(plot_elderly,
 
 #### URBN_TYPE (1 = cities, 2 = towns and suburbs, 3 = rural) ==================
 
-grid_sf_urbntype_v2 <- as.data.frame(grid_eur_sf_nuts3) %>%
-  dplyr::select(URBN_TYPE, geo) %>%
+grid_sf_urbntype_v2 <- as.data.frame(urbn_type) %>%
+  dplyr::select(urbn_type, geo) %>%
   dplyr::distinct() %>%
-  dplyr::mutate(URBN_TYPE = factor(URBN_TYPE,
-    levels = c(1, 2, 3),
-    labels = c("City", "Town/Suburb", "Rural")
-  )) %>%
   as.data.frame() %>%
   # merge with NUTS3 geometries
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
@@ -306,7 +309,7 @@ plot_urbtype <- tm_shape(nuts3_plot_data,
 ) +
   tm_fill("lightgrey") +
   tm_shape(grid_sf_urbntype_v2) +
-  tm_polygons("URBN_TYPE",
+  tm_polygons("urbn_type",
     title = "Urban type",
     palette = c("#C288B0", "#C3D2D5", "#92DEC3")
   ) +
@@ -361,12 +364,14 @@ tmap::tmap_save(plot_cdd,
 
 
 
-harm_socioeconomic_nuts_sf <- data.table::as.data.table(grid_sf_urbntype_v2) %>%
-  dplyr::select(-geometry) %>%
+harm_socioeconomic_nuts_sf <- data.table::as.data.table(urbn_type) %>%
   dplyr::full_join(data.table::as.data.table(grid_sf_cdd_v2) %>%
     dplyr::select(-geometry), by = "geo") %>%
-  dplyr::full_join(data.table::as.data.table(grid_sf_elderly_v3) %>%
-    dplyr::select(-geometry), by = "geo") %>%
+  dplyr::full_join(data.table::as.data.table(rfasst_pop %>% 
+                                               dplyr::filter(year == 2020,
+                                                             geo %in% unique(urbn_type$geo)) %>% 
+                                               dplyr::select(geo, age, sex, pop100K = pop)), 
+                   by = "geo") %>% 
   dplyr::full_join(data.table::as.data.table(harm_data_nuts3_sf) %>%
     dplyr::select(-geometry), by = "geo") %>%
   # merge with NUTS3 geometries

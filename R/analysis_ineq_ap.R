@@ -5,7 +5,7 @@ library(tmap)
 source("R/utils.R")
 source("R/zzz.R")
 
-normalized <- F
+normalized <- T
 
 # ==============================================================================
 #                                  LOAD DATA                                   #
@@ -13,13 +13,15 @@ normalized <- F
 normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
 
 ## load dummy PM2.5 concentration & premature deaths by NUTS3 ==================
-ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData"))
-deaths <- get(load(paste0("data/rfasst_output/tmp_m3_get_mort_pm25.output", normalized_tag, ".RData"))) %>%
-  dplyr::select(region, year, age, sex, disease, value = GBD, scenario)
+ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>% 
+  dplyr::filter(year == 2020)
+deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output", normalized_tag, ".RData"))) %>%
+  dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
+  dplyr::filter(year == 2020)
 
 ## load socioeconomic data =====================================================
 new_colnames <- c(
-  "URBN_TYPE" = "URBN_TY", "geo" = "geo", "mean_per_elderly" = "mn_pr_l",
+  "urbn_type" = "URBN_TY", "geo" = "geo", "mean_per_elderly" = "mn_pr_l",
   "Year" = "Year", "ISO" = "ISO", "Population_nuts3" = "Ppltn_3",
   "Disp_Inc_P_nuts3" = "D_I_P_3", "Gini_nuts3" = "Gn_nts3",
   "geometry" = "geometry"
@@ -121,46 +123,100 @@ tmap::tmap_save(plot_deaths,
 
 
 
-## AP vs URBN_TYPE  ============================================================
+
+## AP vs DEATHS  ===============================================================
+harm_data_geo_urbn <- harm_socioeconomic_nuts_sf %>%
+  dplyr::select(geo, urbn_type)
+harm_data_geo_urbn <- unique(harm_data_geo_urbn)
+
+ap_deaths_nuts3 <- deaths %>%
+  dplyr::filter(
+    nchar(region) > 3,
+    age == ">25"
+  ) %>%
+  dplyr::rename(
+    geo = region,
+    deaths = value
+  ) %>%
+  dplyr::group_by(geo, year, sex, scenario) %>%
+  dplyr::summarise(deaths = sum(deaths)) %>%
+  dplyr::ungroup() %>% 
+  dplyr::left_join(ap %>%
+                     dplyr::filter(
+                       nchar(region) > 3
+                     ) %>%
+                     dplyr::rename(
+                       geo = region,
+                       ap = value
+                     ) %>% 
+                     dplyr::mutate(year = as.numeric(year)) %>% 
+                     dplyr::select(geo, scenario, ap),
+                   by = c('geo','scenario')) %>% 
+  dplyr::left_join(harm_data_geo_urbn %>% 
+                     dplyr::filter(rowSums(is.na(.)) == 0),
+                   by = 'geo') %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+  dplyr::left_join(nuts3_plot_data %>% 
+                     dplyr::select(CNTR_CODE, geo),
+                   by = "geo"
+  )
+  
+
+plot_deaths_ap <- 
+  ggplot(ap_deaths_nuts3 %>% 
+         dplyr::filter(deaths != 0,
+                       sex == 'Both'), 
+       aes(x = deaths, y = ap, color = CNTR_CODE, shape = urbn_type)) +
+  geom_point(alpha = 0.7, size = 2) +
+  theme_minimal() +
+  labs(x = "deaths", y = "ap")
+
+ggsave(
+  file = paste0("figures/plot_deaths_ap", normalized_tag, ".pdf"), height = 15, width = 15, units = "cm",
+  plot = plot_deaths_ap
+)
+
+
+## AP vs urbn_type  ============================================================
 # check normality
 ap_urbntype_sf <- sf::st_join(
   harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, URBN_TYPE, geometry) %>%
+    dplyr::select(geo, urbn_type, geometry) %>%
     dplyr::filter(rowSums(is.na(.)) == 0),
   ap_nuts3_sf %>%
-    dplyr::select(-URBN_TYPE, -geo)
+    dplyr::select(-urbn_type, -geo)
 ) %>%
-  dplyr::select(geo, URBN_TYPE, ap, geometry)
+  dplyr::select(geo, urbn_type, ap, geometry)
 
 # Histogram
 ggplot(ap_urbntype_sf, aes(x = ap)) +
   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~URBN_TYPE)
+  facet_wrap(~urbn_type)
 
 # Q-Q plot
 ggplot(ap_urbntype_sf, aes(sample = ap)) +
   stat_qq() +
   stat_qq_line() +
-  facet_wrap(~URBN_TYPE)
+  facet_wrap(~urbn_type)
 
 # Anderson-Darling Test
 test <- nortest::ad.test(ap_urbntype_sf$ap)
 # A = 74.25, p-value < 2.2e-16 --> NOT normal distribution
 
 # Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(ap ~ URBN_TYPE, data = ap_urbntype_sf)
+test <- kruskal.test(ap ~ urbn_type, data = ap_urbntype_sf)
 # Kruskal-Wallis chi-squared = 796.57, df = 2, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(ap_urbntype_sf), ap ~ URBN_TYPE)
+rstatix::kruskal_effsize(data = as.data.frame(ap_urbntype_sf), ap ~ urbn_type)
 # .y.       n effsize method  magnitude
 # * <chr> <int>   <dbl> <chr>   <ord>
 #   1 ap     8928  0.0890 eta2[H] moderate
-# Result: the effect of the URBN_TYPE is SIGNIFICANT but moderate
+# Result: the effect of the urbn_type is SIGNIFICANT but moderate
 
 
 df <- data.table::as.data.table(ap_urbntype_sf) %>%
   dplyr::select(-geometry)
 df_medi <- df[, .(medi = quantile(ap, 0.5, na.rm = T)),
-  by = c("URBN_TYPE")
+  by = c("urbn_type")
 ]
 
 df <- data.table::data.table(df)
@@ -168,15 +224,15 @@ df <- data.table::data.table(df)
 plot_urbntype_density <- ggplot(df) +
   geom_density(
     data = df, aes(
-      x = ap, group = URBN_TYPE,
-      color = URBN_TYPE, fill = URBN_TYPE
+      x = ap, group = urbn_type,
+      color = urbn_type, fill = urbn_type
     ),
     linewidth = 0.8, alpha = 0.25
   ) +
-  geom_vline(aes(color = URBN_TYPE, xintercept = medi),
+  geom_vline(aes(color = urbn_type, xintercept = medi),
     data = df_medi, linewidth = 1
   ) +
-  facet_wrap(. ~ URBN_TYPE, nrow = 3) +
+  facet_wrap(. ~ urbn_type, nrow = 3) +
   ggpubr::theme_pubr() +
   scale_fill_manual(
     values = urbn_type.color,
@@ -304,17 +360,17 @@ ggsave(
   plot = plot_elderly_density
 )
 
-## DEATHS vs URBN_TYPE ===========================================================
+## DEATHS vs urbn_type ===========================================================
 
 # check normality
 deaths_urbntype_sf <- sf::st_join(
   harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, URBN_TYPE, geometry) %>%
+    dplyr::select(geo, urbn_type, geometry) %>%
     dplyr::filter(rowSums(is.na(.)) == 0),
   deaths_nuts3_sf %>%
     dplyr::select(deaths, geometry)
 ) %>%
-  dplyr::select(geo, URBN_TYPE, deaths, geometry)
+  dplyr::select(geo, urbn_type, deaths, geometry)
 
 deaths_urbntype <- data.table::as.data.table(deaths_urbntype_sf) %>%
   dplyr::select(-geometry) %>%
@@ -325,14 +381,14 @@ deaths_urbntype <- data.table::as.data.table(deaths_urbntype_sf) %>%
 # Histogram
 ggplot(deaths_urbntype, aes(x = deaths)) +
   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~URBN_TYPE) %>%
+  facet_wrap(~urbn_type) %>%
   theme(legend.position = "none")
 
 # Q-Q plot
 ggplot(deaths_urbntype, aes(sample = deaths)) +
   stat_qq() +
   stat_qq_line() +
-  facet_wrap(~URBN_TYPE) %>%
+  facet_wrap(~urbn_type) %>%
   theme(legend.position = "none")
 
 # Anderson-Darling Test
@@ -340,31 +396,31 @@ test <- nortest::ad.test(deaths_urbntype$deaths)
 # A = 3364.5, p-value < 2.2e-16 --> NOT normal distribution
 
 # Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(deaths ~ URBN_TYPE, data = deaths_urbntype_sf)
+test <- kruskal.test(deaths ~ urbn_type, data = deaths_urbntype_sf)
 # Kruskal-Wallis chi-squared = 5273.1, df = 2, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(deaths_urbntype_sf), deaths ~ URBN_TYPE)
+rstatix::kruskal_effsize(data = as.data.frame(deaths_urbntype_sf), deaths ~ urbn_type)
 # .y.       n effsize method  magnitude
 # * <chr> <int>   <dbl> <chr>   <ord>
 #   deaths 127621  0.0413 eta2[H] small
-# Result: the effect of the URBN_TYPE is SIGNIFICANT and SMALL
+# Result: the effect of the urbn_type is SIGNIFICANT and SMALL
 
 
 deaths_urbntype_medi <- deaths_urbntype[, .(medi = quantile(deaths, 0.5, na.rm = T)),
-  by = c("URBN_TYPE")
+  by = c("urbn_type")
 ]
 
 plot_urbntype_density_deaths <- ggplot(deaths_urbntype) +
   geom_density(
     data = deaths_urbntype, aes(
-      x = deaths, group = URBN_TYPE,
-      color = URBN_TYPE, fill = URBN_TYPE
+      x = deaths, group = urbn_type,
+      color = urbn_type, fill = urbn_type
     ),
     linewidth = 0.8, alpha = 0.25
   ) +
-  geom_vline(aes(color = URBN_TYPE, xintercept = medi),
+  geom_vline(aes(color = urbn_type, xintercept = medi),
     data = deaths_urbntype_medi, linewidth = 1
   ) +
-  facet_wrap(. ~ URBN_TYPE,
+  facet_wrap(. ~ urbn_type,
     nrow = 5,
     labeller = as_labeller(urbn_type.labs)
   ) +

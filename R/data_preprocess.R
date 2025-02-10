@@ -20,23 +20,7 @@ sf::st_write(nuts3_plot_data, "data/Replication data/Global_Inputs/nuts3_plot_da
 )
 
 
-#### eurostat nuts3 data - ONLY HDD-CDD USED ===================================
-## read socioeconomic data
-gdp <- eurostat::get_eurostat("nama_10r_3gdp") %>% # gdp NUTS3
-  dplyr::filter(unit == "PPS_EU27_2020_HAB") %>% # Purchasing power standard (PPS, EU27 from 2020), per inhabitant
-  dplyr::filter(grepl("2021", TIME_PERIOD)) %>% # Much more data in 2021
-  dplyr::mutate(unit_GDP = "PPS_EU27_2020_HAB") %>%
-  dplyr::select(geo, unit_GDP, GDPpc = values)
-
-pop <- eurostat::get_eurostat("nama_10r_3popgdp") %>% # pop NUTS3
-  dplyr::filter(grepl("2021", TIME_PERIOD)) %>% # Much more data in 2021
-  dplyr::mutate(unit_POP = "THS") %>%
-  dplyr::select(geo, unit_POP, POP = values)
-
-pop_ctzha <- eurostat::get_eurostat("cens_21ctzha_r3") %>% # pop_detailed NUTS3
-  dplyr::filter(housing == "TOTAL", citizen == "TOTAL") %>%
-  dplyr::select(geo, age_group = age, age = values)
-
+#### eurostat HDD-CDD nuts3 data ===============================================
 hdd_cdd <- eurostat::get_eurostat("nrg_chddr2_a") %>% # HDD & CDD NUTS3
   dplyr::filter(grepl("2023", TIME_PERIOD)) %>%
   tidyr::pivot_wider(names_from = "indic_nrg", values_from = "values") %>%
@@ -45,30 +29,6 @@ hdd_cdd <- eurostat::get_eurostat("nrg_chddr2_a") %>% # HDD & CDD NUTS3
     unit_HDD = "NR"
   ) %>%
   dplyr::select(geo, CDD, HDD, unit_CDD, unit_HDD)
-
-grid_dt <- eurostat::get_eurostat_geospatial(year = 2021) %>% # 2024 available, but not for urbn_type, which will not change much from 2021 to 2024
-  as.data.frame() %>%
-  dplyr::select(LEVL_CODE, NUTS_ID, CNTR_CODE, urbn_type, geo)
-
-
-socioecon_dt <- purrr::reduce(
-  list(grid_dt, gdp, pop, pop_ctzha, hdd_cdd),
-  full_join,
-  by = "geo"
-) %>%
-  dplyr::select(
-    -starts_with("unit"),
-    starts_with("unit")
-  ) %>%
-  dplyr::filter(LEVL_CODE == 3)
-
-
-pop_employed <- eurostat::get_eurostat("nama_10r_3empers") # pop_employed NUTS3
-gva_act <- eurostat::get_eurostat("nama_10r_3gva") # gross value added by act NUTS3
-# pop_fhcs <- eurostat::get_eurostat('cens_21fhcs_r3') # pop_detailed NUTS3
-income <- eurostat::get_eurostat("nama_10r_2hhinc") # income NUTS2 na_item == 'B6N'
-# poverty <- eurostat::get_eurostat('ilc_peps11n') # poverty NUTS2
-
 
 hdd_cdd_sf <- data.table::as.data.table(hdd_cdd) %>%
   dplyr::left_join(
@@ -121,6 +81,10 @@ harm_data <- sf::st_read("data/Replication data/merged_output_2019_wID_clean.shp
   dplyr::mutate(NUTS_ID = dplyr::if_else(NUTS_ID == 'ITC41' & AU_code == 5213, 'ITC41', NUTS_ID)) %>% 
   dplyr::mutate(ISO = dplyr::if_else(NUTS_ID == 'ITC41' & AU_code == 5213, 'ITA', ISO))
 
+# # check the "base" gini, before the NUTS3 aggregation
+# pdf("plot_check_gini_AU_codes.pdf")
+# terra::plot(harm_data %>% dplyr::select(Gini, geometry), border = NA)
+# dev.off()
 
 # check mismatched data (harmonized socioeconomic data NUTS3 code does not match the corresponding CTRY)
 iso2_iso3 <- rfasst::ctry_nuts3_codes %>%
@@ -360,7 +324,6 @@ tmap::tmap_save(plot_cdd,
 # ==============================================================================
 #                                   JOIN DATA                                  #
 # ==============================================================================
-
 
 
 

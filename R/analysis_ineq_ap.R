@@ -6,7 +6,7 @@ source("R/utils.R")
 source("R/zzz.R")
 
 normalized <- T
-
+split_num <- 10 #10 deciles, 5 quintiles
 # ==============================================================================
 #                                  LOAD DATA                                   #
 # ==============================================================================
@@ -21,7 +21,7 @@ deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output", normaliz
 
 ## load socioeconomic data =====================================================
 new_colnames <- c(
-  "geo" = "geo", "urbn_type" = "urbn_ty", "CDD" = "CDD", "HDD" = "HDD",
+  "geo" = "geo", "urbn_type" = "urbn_ty", "CDD" = "CDD", "HDD" = "HDD", "gdp" = "gdp",
   "sex" = "sex", "per_elderly" = "pr_ldrl", "age" = "age", "pop100K" = "pop100K" ,
   "year" = "Year", "iso" = "ISO", "Pop_nuts3" = "Ppltn_3", "Disp_Inc_P_nuts3" = "D_I_P_3",
   "Gini_nuts3" = "Gn_nts3", "geometry" = "geometry"
@@ -292,7 +292,7 @@ ggplot(ap_cdd, aes(sample = ap)) +
   theme(legend.position = "none")
 
 ap_cdd <- ap_cdd %>%
-  dplyr::mutate(mean_cdd_decile = as.factor(dplyr::ntile(cdd, 5)))
+  dplyr::mutate(mean_cdd_decile = as.factor(dplyr::ntile(cdd, split_num)))
 
 ap_cdd_medi <- ap_cdd[, .(medi = quantile(ap, 0.5, na.rm = T)),
                               by = c("mean_cdd_decile")
@@ -389,7 +389,7 @@ rstatix::kruskal_effsize(data = as.data.frame(ap_elderly_sf), ap ~ per_elderly)
 
 
 ap_elderly <- ap_elderly %>%
-  dplyr::mutate(per_elderly_decile = as.factor(dplyr::ntile(per_elderly, 5)))
+  dplyr::mutate(per_elderly_decile = as.factor(dplyr::ntile(per_elderly, split_num)))
 
 ap_elderly_medi <- ap_elderly[, .(medi = quantile(ap, 0.5, na.rm = T)),
   by = c("per_elderly_decile")
@@ -472,9 +472,9 @@ ggplot(ap_income, aes(sample = ap)) +
 
 
 ap_income <- ap_income %>%
-  dplyr::mutate(income_decile = as.factor(dplyr::ntile(income, 5)))
+  dplyr::mutate(income_decile = as.factor(dplyr::ntile(income, split_num)))
 
-ap_elderly_medi <- ap_income[, .(medi = quantile(ap, 0.5, na.rm = T)),
+ap_income_medi <- ap_income[, .(medi = quantile(ap, 0.5, na.rm = T)),
                                      by = c("income_decile")
 ]
 
@@ -487,7 +487,7 @@ plot_income_density_ap <- ggplot(ap_income) +
     linewidth = 0.8, alpha = 0.25
   ) +
   geom_vline(aes(color = income_decile, xintercept = medi),
-             data = ap_elderly_medi, linewidth = 1
+             data = ap_income_medi, linewidth = 1
   ) +
   facet_wrap(. ~ income_decile,
              nrow = 5,
@@ -524,6 +524,92 @@ ggsave(
   plot = plot_income_density_ap
 )
 
+## AP vs GDP ============================================================
+
+# check normality
+ap_gdp_sf <- sf::st_join(
+  harm_socioeconomic_nuts_sf %>%
+    dplyr::select(geo, gdp, geometry) %>%
+    dplyr::filter(rowSums(is.na(.)) == 0),
+  ap_nuts3_sf %>%
+    dplyr::select(ap, geometry)
+) %>%
+  dplyr::select(geo, gdp, ap, geometry)
+
+ap_gdp <- data.table::as.data.table(ap_gdp_sf) %>%
+  dplyr::select(-geometry) %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  # remove outliers(>95%)
+  dplyr::filter(ap <= quantile(ap, probs = 0.95))
+
+# Histogram
+ggplot(ap_gdp, aes(x = ap)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~gdp) %>%
+  theme(legend.position = "none")
+
+# Q-Q plot
+ggplot(ap_gdp, aes(sample = ap)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~gdp) %>%
+  theme(legend.position = "none")
+
+
+
+ap_gdp <- ap_gdp %>%
+  dplyr::mutate(gdp_decile = as.factor(dplyr::ntile(gdp, split_num)))
+
+ap_gdp_medi <- ap_gdp[, .(medi = quantile(ap, 0.5, na.rm = T)),
+                                     by = c("gdp_decile")
+]
+
+plot_gdp_density_ap <- ggplot(ap_gdp) +
+  geom_density(
+    data = ap_gdp, aes(
+      x = ap, group = gdp_decile,
+      color = gdp_decile, fill = gdp_decile
+    ),
+    linewidth = 0.8, alpha = 0.25
+  ) +
+  geom_vline(aes(color = gdp_decile, xintercept = medi),
+             data = ap_gdp_medi, linewidth = 1
+  ) +
+  facet_wrap(. ~ gdp_decile,
+             nrow = 5,
+             labeller = as_labeller(quintiles.labs)
+  ) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(
+    values = quintiles.color,
+    name = "gdp Quintiles [2015 PPP]",
+    labels = quintiles.labs
+  ) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "gdp Quintiles [2015 PPP]",
+    labels = quintiles.labs
+  ) +
+  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = 12),
+    strip.background = element_blank(),
+    axis.title.x = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "cm"),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.position = "bottom"
+  )
+
+ggsave(
+  file = paste0("figures/plot_gdp_density_ap.pdf"), height = 30, width = 20, units = "cm",
+  plot = plot_gdp_density_ap
+)
+
 ## AP vs GINI ============================================================
 
 # check normality
@@ -557,9 +643,9 @@ ggplot(ap_gini, aes(sample = ap)) +
 
 
 ap_gini <- ap_gini %>%
-  dplyr::mutate(gini_decile = as.factor(dplyr::ntile(gini, 5)))
+  dplyr::mutate(gini_decile = as.factor(dplyr::ntile(gini, split_num)))
 
-ap_elderly_medi <- ap_gini[, .(medi = quantile(ap, 0.5, na.rm = T)),
+ap_gini_medi <- ap_gini[, .(medi = quantile(ap, 0.5, na.rm = T)),
                                    by = c("gini_decile")
 ]
 
@@ -572,7 +658,7 @@ plot_gini_density_ap <- ggplot(ap_gini) +
     linewidth = 0.8, alpha = 0.25
   ) +
   geom_vline(aes(color = gini_decile, xintercept = medi),
-             data = ap_elderly_medi, linewidth = 1
+             data = ap_gini_medi, linewidth = 1
   ) +
   facet_wrap(. ~ gini_decile,
              nrow = 5,
@@ -747,7 +833,7 @@ rstatix::kruskal_effsize(data = as.data.frame(deaths_cdd_sf), deaths ~ cdd)
 
 
 deaths_cdd <- deaths_cdd %>%
-  dplyr::mutate(mean_cdd_decile = as.factor(dplyr::ntile(cdd, 5)))
+  dplyr::mutate(mean_cdd_decile = as.factor(dplyr::ntile(cdd, split_num)))
 
 deaths_cdd_medi <- deaths_cdd[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("mean_cdd_decile")
@@ -846,7 +932,7 @@ rstatix::kruskal_effsize(data = as.data.frame(deaths_elderly_sf), deaths ~ per_e
 
 
 deaths_elderly <- deaths_elderly %>%
-  dplyr::mutate(per_elderly_decile = as.factor(dplyr::ntile(per_elderly, 5)))
+  dplyr::mutate(per_elderly_decile = as.factor(dplyr::ntile(per_elderly, split_num)))
 
 deaths_elderly_medi <- deaths_elderly[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("per_elderly_decile")
@@ -945,9 +1031,9 @@ rstatix::kruskal_effsize(data = as.data.frame(deaths_income_sf), deaths ~ income
 
 
 deaths_income <- deaths_income %>%
-  dplyr::mutate(income_decile = as.factor(dplyr::ntile(income, 5)))
+  dplyr::mutate(income_decile = as.factor(dplyr::ntile(income, split_num)))
 
-deaths_elderly_medi <- deaths_income[, .(medi = quantile(deaths, 0.5, na.rm = T)),
+deaths_income_medi <- deaths_income[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("income_decile")
 ]
 
@@ -960,7 +1046,7 @@ plot_income_density_deaths <- ggplot(deaths_income) +
     linewidth = 0.8, alpha = 0.25
   ) +
   geom_vline(aes(color = income_decile, xintercept = medi),
-    data = deaths_elderly_medi, linewidth = 1
+    data = deaths_income_medi, linewidth = 1
   ) +
   facet_wrap(. ~ income_decile,
     nrow = 5,
@@ -995,6 +1081,90 @@ plot_income_density_deaths <- ggplot(deaths_income) +
 ggsave(
   file = paste0("figures/plot_income_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
   plot = plot_income_density_deaths
+)
+
+## DEATHS vs GDP ============================================================
+
+# check normality
+deaths_gdp_sf <- sf::st_join(
+  harm_socioeconomic_nuts_sf %>%
+    dplyr::select(geo, gdp, geometry) %>%
+    dplyr::filter(rowSums(is.na(.)) == 0),
+  deaths_nuts3_sf %>%
+    dplyr::select(deaths, geometry)
+) %>%
+  dplyr::select(geo, gdp, deaths, geometry)
+
+deaths_gdp <- data.table::as.data.table(deaths_gdp_sf) %>%
+  dplyr::select(-geometry) %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  # remove outliers(>95%)
+  dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
+
+# Histogram
+ggplot(deaths_gdp, aes(x = deaths)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~gdp) %>%
+  theme(legend.position = "none")
+
+# Q-Q plot
+ggplot(deaths_gdp, aes(sample = deaths)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~gdp) %>%
+  theme(legend.position = "none")
+
+deaths_gdp <- deaths_gdp %>%
+  dplyr::mutate(gdp_decile = as.factor(dplyr::ntile(gdp, split_num)))
+
+deaths_gdp_medi <- deaths_gdp[, .(medi = quantile(deaths, 0.5, na.rm = T)),
+  by = c("gdp_decile")
+]
+
+plot_gdp_density_deaths <- ggplot(deaths_gdp) +
+  geom_density(
+    data = deaths_gdp, aes(
+      x = deaths, group = gdp_decile,
+      color = gdp_decile, fill = gdp_decile
+    ),
+    linewidth = 0.8, alpha = 0.25
+  ) +
+  geom_vline(aes(color = gdp_decile, xintercept = medi),
+    data = deaths_gdp_medi, linewidth = 1
+  ) +
+  facet_wrap(. ~ gdp_decile,
+    nrow = 5,
+    labeller = as_labeller(quintiles.labs)
+  ) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(
+    values = quintiles.color,
+    name = "gdp Quintiles [2015 PPP]",
+    labels = quintiles.labs
+  ) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "gdp Quintiles [2015 PPP]",
+    labels = quintiles.labs
+  ) +
+  labs(x = "Premature deaths [NR]", y = "Probability density") +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = 12),
+    strip.background = element_blank(),
+    axis.title.x = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "cm"),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.position = "bottom"
+  )
+
+ggsave(
+  file = paste0("figures/plot_gdp_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+  plot = plot_gdp_density_deaths
 )
 
 ## DEATHS vs GINI ============================================================
@@ -1044,9 +1214,9 @@ rstatix::kruskal_effsize(data = as.data.frame(deaths_gini_sf), deaths ~ gini)
 
 
 deaths_gini <- deaths_gini %>%
-  dplyr::mutate(gini_decile = as.factor(dplyr::ntile(gini, 5)))
+  dplyr::mutate(gini_decile = as.factor(dplyr::ntile(gini, split_num)))
 
-deaths_elderly_medi <- deaths_gini[, .(medi = quantile(deaths, 0.5, na.rm = T)),
+deaths_gini_medi <- deaths_gini[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("gini_decile")
 ]
 
@@ -1059,7 +1229,7 @@ plot_gini_density_deaths <- ggplot(deaths_gini) +
     linewidth = 0.8, alpha = 0.25
   ) +
   geom_vline(aes(color = gini_decile, xintercept = medi),
-    data = deaths_elderly_medi, linewidth = 1
+    data = deaths_gini_medi, linewidth = 1
   ) +
   facet_wrap(. ~ gini_decile,
     nrow = 5,
@@ -1094,4 +1264,94 @@ plot_gini_density_deaths <- ggplot(deaths_gini) +
 ggsave(
   file = paste0("figures/plot_gini_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
   plot = plot_gini_density_deaths
+)
+
+# ==============================================================================
+#                                    Figures                                   #
+# ==============================================================================
+
+## Figure 2 ====================================================================
+
+data_list <- list(
+  ap_income_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "income_medi", contains("medi")),
+  
+  ap_gini_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "gini_medi", contains("medi")),
+
+  ap_gdp_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "gdp_medi", contains("medi")),
+  
+  ap_cdd_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "cdd_medi", contains("medi")),
+  
+  ap_elderly_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "elderly_medi", contains("medi"))
+)
+
+# Merge all datasets by 'decile'
+data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = "decile")) %>% 
+  tidyr::pivot_longer(cols = -decile, names_to = "variable", values_to = "value")
+
+# Plotting
+pl <- ggplot(data,
+       # %>% 
+       #   dplyr::filter(decile %in% c(1,5,split_num)),
+       aes(y = factor(variable), x = value, color = factor(decile))) +
+  geom_point() +
+  # scale_color_manual(values = viridis::viridis(n = split_num, option = "cividis")) +
+  scale_color_manual(values = RColorBrewer::brewer.pal(n = split_num, name = "RdYlBu")) +
+  labs(x = "PM2.5 concentration [ug/m3]", y = "", fill = "Decile") +
+  theme_minimal()
+ggsave(
+  file = paste0("figures/fig_ap_var.pdf"), height = 20, width = 20, units = "cm",
+  plot = pl
+)
+
+
+data_list <- list(
+  deaths_income_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "income_medi", contains("medi")),
+  
+  deaths_gini_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "gini_medi", contains("medi")),
+  
+  deaths_gdp_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "gdp_medi", contains("medi")),
+
+  deaths_cdd_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "cdd_medi", contains("medi")),
+  
+  deaths_elderly_medi %>%
+    dplyr::rename_with(~ "decile", contains("decile")) %>%
+    dplyr::rename_with(~ "elderly_medi", contains("medi"))
+)
+
+# Merge all datasets by 'decile'
+data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = "decile")) %>% 
+  tidyr::pivot_longer(cols = -decile, names_to = "variable", values_to = "value")
+
+# Plotting
+
+pl <- ggplot(data,
+             # %>% 
+             #   dplyr::filter(decile %in% c(1,5,split_num)),
+             aes(y = factor(variable), x = value, color = factor(decile))) +
+  geom_point() +
+  # scale_color_manual(values = viridis::viridis(n = split_num, option = "cividis")) +
+  scale_color_manual(values = RColorBrewer::brewer.pal(n = split_num, name = "RdYlBu")) +
+  labs(x = "Premture deaths [NR]", y = "", fill = "Decile") +
+  theme_minimal()
+ggsave(
+  file = paste0("figures/fig_deaths_var",normalized_tag,".pdf"), height = 20, width = 20, units = "cm",
+  plot = pl
 )

@@ -40,6 +40,23 @@ hdd_cdd_sf <- sf::st_sf(hdd_cdd_sf, geometry = hdd_cdd_sf$geometry)
 sf::st_write(hdd_cdd_sf, "data/tmp/hdd_cdd_sf.shp", append = FALSE)
 
 
+#### eurostat GDP nuts3 data ===============================================
+gdp <- eurostat::get_eurostat("nama_10r_3gdp") %>% # GDP NUTS3
+  dplyr::filter(unit == 'PPS_EU27_2020_HAB',
+                grepl("2021", TIME_PERIOD),
+                nchar(geo) == 5) %>%
+  dplyr::select(geo, gdp = values, unit_gdp = unit)
+
+gdp_sf <- data.table::as.data.table(gdp) %>%
+  dplyr::left_join(
+    nuts3_plot_data %>%
+      dplyr::select(geo, geometry),
+    by = "geo"
+  )
+gdp_sf <- sf::st_sf(gdp_sf, geometry = gdp_sf$geometry)
+sf::st_write(gdp_sf, "data/tmp/gdp_sf.shp", append = FALSE)
+
+
 
 #### rfasst population data ====================================================
 # Source: rfasst pkg, dev_k branch
@@ -117,6 +134,30 @@ sf::st_write(harm_data_sf, "data/tmp/harm_data_sf.shp", append = FALSE)
 # ==============================================================================
 #                              COMPUTE INDICATORS                              #
 # ==============================================================================
+
+#### GDP =======================================================================
+plot_gdp <- tm_shape(nuts3_plot_data,
+                        projection = "EPSG:3035",
+                        xlim = c(2400000, 6500000),
+                        ylim = c(1320000, 5650000)
+) +
+  tm_fill("lightgrey") +
+  tm_shape(gdp_sf %>%
+             dplyr::select(gdp, geometry) %>%
+             dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+             dplyr::filter(!st_is_empty(geometry))) +
+  tm_polygons("gdp",
+              title = "GDP\n[2020 PPP EU27 €]",
+              palette = "Oranges",
+              style = "cont"
+  ) +
+  tm_layout(legend.title.size = 0.8) +
+  tm_layout(legend.text.size = 0.6)
+
+tmap::tmap_save(plot_gdp,
+                filename = "figures/plot_gdp.pdf",
+                width = 100, height = 100, units = "mm", dpi = 300
+)
 
 #### DISPOSABLE INCOME & GINI ==================================================
 harm_data_income_nuts3 <- data.table::as.data.table(harm_data) %>%
@@ -330,6 +371,8 @@ tmap::tmap_save(plot_cdd,
 harm_socioeconomic_nuts_sf <- data.table::as.data.table(urbn_type) %>%
   dplyr::full_join(data.table::as.data.table(grid_sf_cdd_v2) %>%
     dplyr::select(-geometry), by = "geo") %>%
+  dplyr::full_join(data.table::as.data.table(gdp_sf) %>%
+    dplyr::select(geo, gdp), by = "geo") %>%
   dplyr::full_join(data.table::as.data.table(grid_sf_elderly_v3) %>%
                      dplyr::filter(year == 2020) %>% 
                      dplyr::select(geo, sex, per_elderly), 

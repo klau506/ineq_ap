@@ -1,6 +1,7 @@
 require(eurostat)
 library(ggplot2)
 library(tmap)
+library(magrittr)
 
 source("R/utils.R")
 source("R/zzz.R")
@@ -13,16 +14,43 @@ split_num <- 10 #10 deciles, 5 quintiles
 normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
 
 ## load dummy PM2.5 concentration & premature deaths by NUTS3 ==================
+rfasst_pop <- get(load("data/tmp/rfasst_pop.RData"))
+
 ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>% 
   dplyr::filter(year == 2030)
-deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output", normalized_tag, ".RData"))) %>%
+deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
   dplyr::filter(year == 2030)
+if (normalized) {
+  deaths <- deaths %>% 
+    dplyr::group_by(region, year, sex, scenario) %>% 
+    dplyr::summarise(value = sum(value)) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::left_join(data.table::as.data.table(rfasst_pop) %>% 
+                       dplyr::filter(year == 2030) %>%
+                       dplyr::group_by(region = geo, sex) %>% 
+                       dplyr::summarise(pop = sum(pop) * 1e6) %>% # popM was in million
+                       dplyr::ungroup(),
+                     by = c('region','sex')) %>% 
+    dplyr::mutate(value = value / pop * 1e6) %>% # deaths per 1000 habitants
+    dplyr::select(-pop)
+  # deathsharm <- deaths %>% 
+  #   dplyr::group_by(region, year, sex, scenario) %>% 
+  #   dplyr::summarise(value = sum(value)) %>% 
+  #   dplyr::ungroup() %>% 
+  #   dplyr::left_join(data.table::as.data.table(harm_socioeconomic_nuts_sf) %>% 
+  #                      # dplyr::filter(year == 2020) %>% 
+  #                      dplyr::group_by(region = geo, sex) %>% 
+  #                      dplyr::summarise(pop = sum(popM) * 1e6) %>% # popM was in million
+  #                      dplyr::ungroup(),
+  #                    by = c('region','sex')) %>% 
+  #   dplyr::mutate(value2 = value / pop * 1e3) # deaths per 1000 habitants
+}
 
 ## load socioeconomic data =====================================================
 new_colnames <- c(
   "geo" = "geo", "urbn_type" = "urbn_ty", "CDD" = "CDD", "HDD" = "HDD", "gdp" = "gdp",
-  "sex" = "sex", "per_elderly" = "pr_ldrl", "age" = "age", "pop100K" = "pop100K" ,
+  "sex" = "sex", "per_elderly" = "pr_ldrl", "age" = "age", "popM" = "popM" ,
   "year" = "Year", "iso" = "ISO", "Pop_nuts3" = "Ppltn_3", "Disp_Inc_P_nuts3" = "D_I_P_3",
   "Gini_nuts3" = "Gn_nts3", "geometry" = "geometry"
 )
@@ -76,8 +104,7 @@ tmap::tmap_save(plot_ap,
 ## DEATHS  =====================================================================
 deaths_nuts3 <- deaths %>%
   dplyr::filter(
-    nchar(region) > 3,
-    age == ">25"
+    nchar(region) > 3
   ) %>%
   dplyr::rename(
     geo = region,
@@ -94,7 +121,8 @@ if (nrow(deaths_nuts3[rowSums(is.na(deaths_nuts3)) > 0, ]) != 0) {
   warning("There are not-matching NUTS3 codes between the rfasst MORT results and EUROSTAT NUTS3 data")
 }
 
-plot_deaths <- tm_shape(nuts3_plot_data,
+plot_deaths <- 
+  tm_shape(nuts3_plot_data,
   projection = "EPSG:3035",
   xlim = c(2400000, 6500000),
   ylim = c(1320000, 5650000)
@@ -105,7 +133,7 @@ plot_deaths <- tm_shape(nuts3_plot_data,
       sex == "Both"
     )) +
   tm_polygons("deaths",
-    title = "Premature\ndeaths [NR]",
+    title = "Premature deaths\n[Normalized M]",
     palette = "Oranges",
     style = "cont"
   ) +
@@ -134,9 +162,6 @@ ap_deaths_nuts3 <- deaths %>%
     geo = region,
     deaths = value
   ) %>%
-  dplyr::group_by(geo, year, sex, scenario) %>%
-  dplyr::summarise(deaths = sum(deaths)) %>%
-  dplyr::ungroup() %>% 
   dplyr::left_join(ap %>%
                      dplyr::filter(
                        nchar(region) > 3
@@ -163,9 +188,9 @@ plot_deaths_ap <-
          dplyr::filter(deaths != 0,
                        sex == 'Both'), 
        aes(x = deaths, y = ap, color = CNTR_CODE, shape = urbn_type)) +
-  geom_point(alpha = 0.7, size = 2) +
+  geom_point(alpha = 0.5, size = 2) +
   theme_minimal() +
-  labs(x = "deaths", y = "ap")
+  labs(x = "Premature deaths [normalized million]", y = "PM2.5 concentration [ug/m3]")
 
 ggsave(
   file = paste0("figures/plot_deaths_ap", normalized_tag, ".pdf"), height = 15, width = 15, units = "cm",
@@ -184,29 +209,29 @@ ap_urbntype_sf <- sf::st_join(
 ) %>%
   dplyr::select(geo, urbn_type, ap, geometry)
 
-# Histogram
-ggplot(ap_urbntype_sf, aes(x = ap)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~urbn_type)
-
-# Q-Q plot
-ggplot(ap_urbntype_sf, aes(sample = ap)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~urbn_type)
-
-# Anderson-Darling Test
-test <- nortest::ad.test(ap_urbntype_sf$ap)
-# A = 74.25, p-value < 2.2e-16 --> NOT normal distribution
-
-# Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(ap ~ urbn_type, data = ap_urbntype_sf)
-# Kruskal-Wallis chi-squared = 796.57, df = 2, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(ap_urbntype_sf), ap ~ urbn_type)
-# .y.       n effsize method  magnitude
-# * <chr> <int>   <dbl> <chr>   <ord>
-#   1 ap     8928  0.0890 eta2[H] moderate
-# Result: the effect of the urbn_type is SIGNIFICANT but moderate
+# # Histogram
+# ggplot(ap_urbntype_sf, aes(x = ap)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~urbn_type)
+# 
+# # Q-Q plot
+# ggplot(ap_urbntype_sf, aes(sample = ap)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~urbn_type)
+# 
+# # Anderson-Darling Test
+# test <- nortest::ad.test(ap_urbntype_sf$ap)
+# # A = 74.25, p-value < 2.2e-16 --> NOT normal distribution
+# 
+# # Kruskal-Wallis Test (for >2 categories) - non parametric test
+# test <- kruskal.test(ap ~ urbn_type, data = ap_urbntype_sf)
+# # Kruskal-Wallis chi-squared = 796.57, df = 2, p-value < 2.2e-16
+# rstatix::kruskal_effsize(data = as.data.frame(ap_urbntype_sf), ap ~ urbn_type)
+# # .y.       n effsize method  magnitude
+# # * <chr> <int>   <dbl> <chr>   <ord>
+# #   1 ap     8928  0.0890 eta2[H] moderate
+# # Result: the effect of the urbn_type is SIGNIFICANT but moderate
 
 
 df <- data.table::as.data.table(ap_urbntype_sf) %>%
@@ -280,16 +305,16 @@ ap_cdd <- data.table::as.data.table(ap_cdd_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(ap <= quantile(ap, probs = 0.95))
 
-# Histogram
-ggplot(ap_cdd, aes(x = ap)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(ap_cdd, aes(sample = ap)) +
-  stat_qq() +
-  stat_qq_line() +
-  theme(legend.position = "none")
+# # Histogram
+# ggplot(ap_cdd, aes(x = ap)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(ap_cdd, aes(sample = ap)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   theme(legend.position = "none")
 
 ap_cdd <- ap_cdd %>%
   dplyr::mutate(mean_cdd_decile = as.factor(dplyr::ntile(cdd, split_num)))
@@ -360,33 +385,31 @@ ap_elderly <- data.table::as.data.table(ap_elderly_sf) %>%
   dplyr::select(-geometry) %>%
   dplyr::filter(rowSums(is.na(.)) == 0)
 
-# Histogram
-ggplot(ap_elderly, aes(x = ap)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~per_elderly) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(ap_elderly, aes(sample = ap)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~per_elderly) %>%
-  theme(legend.position = "none")
-
-# Anderson-Darling Test
-test <- nortest::ad.test(ap_elderly$ap)
-# A = 73.063, p-value < 2.2e-16 --> NOT normal distribution
-
-# Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(ap ~ per_elderly, data = ap_elderly_sf)
-# Kruskal-Wallis chi-squared = 7255.4, df = 1199, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(ap_elderly_sf), ap ~ per_elderly)
-# .y.       n effsize method  magnitude
-# * <chr> <int>   <dbl> <chr>   <ord>
-#   ap     8928   0.784 eta2[H] large
-# Result: the effect of the per_elderly is SIGNIFICANT and LARGE
-
-
+# # Histogram
+# ggplot(ap_elderly, aes(x = ap)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~per_elderly) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(ap_elderly, aes(sample = ap)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~per_elderly) %>%
+#   theme(legend.position = "none")
+# 
+# # Anderson-Darling Test
+# test <- nortest::ad.test(ap_elderly$ap)
+# # A = 73.063, p-value < 2.2e-16 --> NOT normal distribution
+# 
+# # Kruskal-Wallis Test (for >2 categories) - non parametric test
+# test <- kruskal.test(ap ~ per_elderly, data = ap_elderly_sf)
+# # Kruskal-Wallis chi-squared = 7255.4, df = 1199, p-value < 2.2e-16
+# rstatix::kruskal_effsize(data = as.data.frame(ap_elderly_sf), ap ~ per_elderly)
+# # .y.       n effsize method  magnitude
+# # * <chr> <int>   <dbl> <chr>   <ord>
+# #   ap     8928   0.784 eta2[H] large
+# # Result: the effect of the per_elderly is SIGNIFICANT and LARGE
 
 ap_elderly <- ap_elderly %>%
   dplyr::mutate(per_elderly_decile = as.factor(dplyr::ntile(per_elderly, split_num)))
@@ -456,20 +479,19 @@ ap_income <- data.table::as.data.table(ap_income_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(ap <= quantile(ap, probs = 0.95))
 
-# Histogram
-ggplot(ap_income, aes(x = ap)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~income) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(ap_income, aes(sample = ap)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~income) %>%
-  theme(legend.position = "none")
-
-
+# # Histogram
+# ggplot(ap_income, aes(x = ap)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~income) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(ap_income, aes(sample = ap)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~income) %>%
+#   theme(legend.position = "none")
+# 
 
 ap_income <- ap_income %>%
   dplyr::mutate(income_decile = as.factor(dplyr::ntile(income, split_num)))
@@ -542,19 +564,18 @@ ap_gdp <- data.table::as.data.table(ap_gdp_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(ap <= quantile(ap, probs = 0.95))
 
-# Histogram
-ggplot(ap_gdp, aes(x = ap)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~gdp) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(ap_gdp, aes(sample = ap)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~gdp) %>%
-  theme(legend.position = "none")
-
+# # Histogram
+# ggplot(ap_gdp, aes(x = ap)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~gdp) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(ap_gdp, aes(sample = ap)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~gdp) %>%
+#   theme(legend.position = "none")
 
 
 ap_gdp <- ap_gdp %>%
@@ -628,18 +649,18 @@ ap_gini <- data.table::as.data.table(ap_gini_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(ap <= quantile(ap, probs = 0.95))
 
-# Histogram
-ggplot(ap_gini, aes(x = ap)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~gini) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(ap_gini, aes(sample = ap)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~gini) %>%
-  theme(legend.position = "none")
+# # Histogram
+# ggplot(ap_gini, aes(x = ap)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~gini) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(ap_gini, aes(sample = ap)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~gini) %>%
+#   theme(legend.position = "none")
 
 
 ap_gini <- ap_gini %>%
@@ -712,32 +733,31 @@ deaths_urbntype <- data.table::as.data.table(deaths_urbntype_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
 
-# Histogram
-ggplot(deaths_urbntype, aes(x = deaths)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~urbn_type) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(deaths_urbntype, aes(sample = deaths)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~urbn_type) %>%
-  theme(legend.position = "none")
-
-# Anderson-Darling Test
-test <- nortest::ad.test(deaths_urbntype$deaths)
-# A = 3364.5, p-value < 2.2e-16 --> NOT normal distribution
-
-# Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(deaths ~ urbn_type, data = deaths_urbntype_sf)
-# Kruskal-Wallis chi-squared = 5273.1, df = 2, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(deaths_urbntype_sf), deaths ~ urbn_type)
-# .y.       n effsize method  magnitude
-# * <chr> <int>   <dbl> <chr>   <ord>
-#   deaths 127621  0.0413 eta2[H] small
-# Result: the effect of the urbn_type is SIGNIFICANT and SMALL
-
+# # Histogram
+# ggplot(deaths_urbntype, aes(x = deaths)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~urbn_type) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(deaths_urbntype, aes(sample = deaths)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~urbn_type) %>%
+#   theme(legend.position = "none")
+# 
+# # Anderson-Darling Test
+# test <- nortest::ad.test(deaths_urbntype$deaths)
+# # A = 3364.5, p-value < 2.2e-16 --> NOT normal distribution
+# 
+# # Kruskal-Wallis Test (for >2 categories) - non parametric test
+# test <- kruskal.test(deaths ~ urbn_type, data = deaths_urbntype_sf)
+# # Kruskal-Wallis chi-squared = 5273.1, df = 2, p-value < 2.2e-16
+# rstatix::kruskal_effsize(data = as.data.frame(deaths_urbntype_sf), deaths ~ urbn_type)
+# # .y.       n effsize method  magnitude
+# # * <chr> <int>   <dbl> <chr>   <ord>
+# #   deaths 127621  0.0413 eta2[H] small
+# # Result: the effect of the urbn_type is SIGNIFICANT and SMALL
 
 deaths_urbntype_medi <- deaths_urbntype[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("urbn_type")
@@ -769,7 +789,7 @@ plot_urbntype_density_deaths <- ggplot(deaths_urbntype) +
     name = "Urban type",
     labels = urbn_type.labs
   ) +
-  labs(x = "Premature deaths [NR]", y = "Probability density") +
+  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
   theme(
     panel.background = element_rect(fill = "white"),
     panel.grid.major = element_line(colour = "grey90"),
@@ -807,29 +827,29 @@ deaths_cdd <- data.table::as.data.table(deaths_cdd_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
 
-# Histogram
-ggplot(deaths_cdd, aes(x = deaths)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(deaths_cdd, aes(sample = deaths)) +
-  stat_qq() +
-  stat_qq_line() +
-  theme(legend.position = "none")
-
-# Anderson-Darling Test
-test <- nortest::ad.test(deaths_cdd$deaths)
-# A = 15155, p-value < 2.2e-16 (all data) --> NOT normal distribution
-
-# Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(deaths ~ cdd, data = deaths_cdd_sf)
-# Kruskal-Wallis chi-squared = 52418, df = 1016, p-value < 2.2e-16 (all data)
-rstatix::kruskal_effsize(data = as.data.frame(deaths_cdd_sf), deaths ~ cdd)
-# .y.       n effsize method  magnitude
-# * <chr> <int>   <dbl> <chr>   <ord>
-#   deaths 144454   0.358 eta2[H] large
-# Result: the effect of the cdd is SIGNIFICANT and LARGE
+# # Histogram
+# ggplot(deaths_cdd, aes(x = deaths)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(deaths_cdd, aes(sample = deaths)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   theme(legend.position = "none")
+# 
+# # Anderson-Darling Test
+# test <- nortest::ad.test(deaths_cdd$deaths)
+# # A = 15155, p-value < 2.2e-16 (all data) --> NOT normal distribution
+# 
+# # Kruskal-Wallis Test (for >2 categories) - non parametric test
+# test <- kruskal.test(deaths ~ cdd, data = deaths_cdd_sf)
+# # Kruskal-Wallis chi-squared = 52418, df = 1016, p-value < 2.2e-16 (all data)
+# rstatix::kruskal_effsize(data = as.data.frame(deaths_cdd_sf), deaths ~ cdd)
+# # .y.       n effsize method  magnitude
+# # * <chr> <int>   <dbl> <chr>   <ord>
+# #   deaths 144454   0.358 eta2[H] large
+# # Result: the effect of the cdd is SIGNIFICANT and LARGE
 
 
 deaths_cdd <- deaths_cdd %>%
@@ -865,7 +885,7 @@ plot_cdd_density_deaths <- ggplot(deaths_cdd) +
     name = "CDD [NR]",
     labels = quintiles.labs
   ) +
-  labs(x = "Premature deaths [NR]", y = "Probability density") +
+  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
   theme(
     panel.background = element_rect(fill = "white"),
     panel.grid.major = element_line(colour = "grey90"),
@@ -903,31 +923,31 @@ deaths_elderly <- data.table::as.data.table(deaths_elderly_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
 
-# Histogram
-ggplot(deaths_elderly, aes(x = deaths)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~per_elderly) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(deaths_elderly, aes(sample = deaths)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~per_elderly) %>%
-  theme(legend.position = "none")
-
-# Anderson-Darling Test
-test <- nortest::ad.test(deaths_elderly$deaths)
-# A = 3366, p-value < 2.2e-16 --> NOT normal distribution
-
-# Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(deaths ~ per_elderly, data = deaths_elderly_sf)
-# Kruskal-Wallis chi-squared = 61598, df = 1169, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(deaths_elderly_sf), deaths ~ per_elderly)
-# .y.       n effsize method  magnitude
-# * <chr> <int>   <dbl> <chr>   <ord>
-#   deaths 127621   0.478 eta2[H] large
-# Result: the effect of the per_elderly is SIGNIFICANT and LARGE
+# # Histogram
+# ggplot(deaths_elderly, aes(x = deaths)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~per_elderly) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(deaths_elderly, aes(sample = deaths)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~per_elderly) %>%
+#   theme(legend.position = "none")
+# 
+# # Anderson-Darling Test
+# test <- nortest::ad.test(deaths_elderly$deaths)
+# # A = 3366, p-value < 2.2e-16 --> NOT normal distribution
+# 
+# # Kruskal-Wallis Test (for >2 categories) - non parametric test
+# test <- kruskal.test(deaths ~ per_elderly, data = deaths_elderly_sf)
+# # Kruskal-Wallis chi-squared = 61598, df = 1169, p-value < 2.2e-16
+# rstatix::kruskal_effsize(data = as.data.frame(deaths_elderly_sf), deaths ~ per_elderly)
+# # .y.       n effsize method  magnitude
+# # * <chr> <int>   <dbl> <chr>   <ord>
+# #   deaths 127621   0.478 eta2[H] large
+# # Result: the effect of the per_elderly is SIGNIFICANT and LARGE
 
 
 
@@ -964,7 +984,7 @@ plot_elderly_density_deaths <- ggplot(deaths_elderly) +
     name = "Elderly population [%]",
     labels = quintiles.labs
   ) +
-  labs(x = "Premature deaths [NR]", y = "Probability density") +
+  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
   theme(
     panel.background = element_rect(fill = "white"),
     panel.grid.major = element_line(colour = "grey90"),
@@ -1002,32 +1022,31 @@ deaths_income <- data.table::as.data.table(deaths_income_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
 
-# Histogram
-ggplot(deaths_income, aes(x = deaths)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~income) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(deaths_income, aes(sample = deaths)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~income) %>%
-  theme(legend.position = "none")
-
-# Anderson-Darling Test
-test <- nortest::ad.test(deaths_income$deaths)
-# A = 3883.6, p-value < 2.2e-16 --> NOT normal distribution
-
-# Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(deaths ~ income, data = deaths_income_sf)
-# Kruskal-Wallis chi-squared = 47227, df = 1124, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(deaths_income_sf), deaths ~ income)
-# .y.       n effsize method  magnitude
-# * <chr> <int>   <dbl> <chr>   <ord>
-#   deaths 127621   0.364 eta2[H] large
-# Result: the effect of the income is SIGNIFICANT and LARGE
-
+# # Histogram
+# ggplot(deaths_income, aes(x = deaths)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~income) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(deaths_income, aes(sample = deaths)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~income) %>%
+#   theme(legend.position = "none")
+# 
+# # Anderson-Darling Test
+# test <- nortest::ad.test(deaths_income$deaths)
+# # A = 3883.6, p-value < 2.2e-16 --> NOT normal distribution
+# 
+# # Kruskal-Wallis Test (for >2 categories) - non parametric test
+# test <- kruskal.test(deaths ~ income, data = deaths_income_sf)
+# # Kruskal-Wallis chi-squared = 47227, df = 1124, p-value < 2.2e-16
+# rstatix::kruskal_effsize(data = as.data.frame(deaths_income_sf), deaths ~ income)
+# # .y.       n effsize method  magnitude
+# # * <chr> <int>   <dbl> <chr>   <ord>
+# #   deaths 127621   0.364 eta2[H] large
+# # Result: the effect of the income is SIGNIFICANT and LARGE
 
 
 deaths_income <- deaths_income %>%
@@ -1063,7 +1082,7 @@ plot_income_density_deaths <- ggplot(deaths_income) +
     name = "Income Quintiles [2015 PPP]",
     labels = quintiles.labs
   ) +
-  labs(x = "Premature deaths [NR]", y = "Probability density") +
+  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
   theme(
     panel.background = element_rect(fill = "white"),
     panel.grid.major = element_line(colour = "grey90"),
@@ -1101,18 +1120,18 @@ deaths_gdp <- data.table::as.data.table(deaths_gdp_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
 
-# Histogram
-ggplot(deaths_gdp, aes(x = deaths)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~gdp) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(deaths_gdp, aes(sample = deaths)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~gdp) %>%
-  theme(legend.position = "none")
+# # Histogram
+# ggplot(deaths_gdp, aes(x = deaths)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~gdp) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(deaths_gdp, aes(sample = deaths)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~gdp) %>%
+#   theme(legend.position = "none")
 
 deaths_gdp <- deaths_gdp %>%
   dplyr::mutate(gdp_decile = as.factor(dplyr::ntile(gdp, split_num)))
@@ -1147,7 +1166,7 @@ plot_gdp_density_deaths <- ggplot(deaths_gdp) +
     name = "gdp Quintiles [2015 PPP]",
     labels = quintiles.labs
   ) +
-  labs(x = "Premature deaths [NR]", y = "Probability density") +
+  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
   theme(
     panel.background = element_rect(fill = "white"),
     panel.grid.major = element_line(colour = "grey90"),
@@ -1185,32 +1204,31 @@ deaths_gini <- data.table::as.data.table(deaths_gini_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
 
-# Histogram
-ggplot(deaths_gini, aes(x = deaths)) +
-  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~gini) %>%
-  theme(legend.position = "none")
-
-# Q-Q plot
-ggplot(deaths_gini, aes(sample = deaths)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~gini) %>%
-  theme(legend.position = "none")
-
-# Anderson-Darling Test
-test <- nortest::ad.test(deaths_gini$deaths)
-# A = 3883.6, p-value < 2.2e-16 --> NOT normal distribution
-
-# Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(deaths ~ gini, data = deaths_gini_sf)
-# Kruskal-Wallis chi-squared = 48183, df = 958, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(deaths_gini_sf), deaths ~ gini)
-# .y.       n effsize method  magnitude
-# * <chr> <int>   <dbl> <chr>   <ord>
-#   deaths 127621   0.373 eta2[H] large
-# Result: the effect of the gini is SIGNIFICANT and LARGE
-
+# # Histogram
+# ggplot(deaths_gini, aes(x = deaths)) +
+#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+#   facet_wrap(~gini) %>%
+#   theme(legend.position = "none")
+# 
+# # Q-Q plot
+# ggplot(deaths_gini, aes(sample = deaths)) +
+#   stat_qq() +
+#   stat_qq_line() +
+#   facet_wrap(~gini) %>%
+#   theme(legend.position = "none")
+# 
+# # Anderson-Darling Test
+# test <- nortest::ad.test(deaths_gini$deaths)
+# # A = 3883.6, p-value < 2.2e-16 --> NOT normal distribution
+# 
+# # Kruskal-Wallis Test (for >2 categories) - non parametric test
+# test <- kruskal.test(deaths ~ gini, data = deaths_gini_sf)
+# # Kruskal-Wallis chi-squared = 48183, df = 958, p-value < 2.2e-16
+# rstatix::kruskal_effsize(data = as.data.frame(deaths_gini_sf), deaths ~ gini)
+# # .y.       n effsize method  magnitude
+# # * <chr> <int>   <dbl> <chr>   <ord>
+# #   deaths 127621   0.373 eta2[H] large
+# # Result: the effect of the gini is SIGNIFICANT and LARGE
 
 
 deaths_gini <- deaths_gini %>%
@@ -1246,7 +1264,7 @@ plot_gini_density_deaths <- ggplot(deaths_gini) +
     name = "Gini Quintiles [Index]",
     labels = quintiles.labs
   ) +
-  labs(x = "Premature deaths [NR]", y = "Probability density") +
+  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
   theme(
     panel.background = element_rect(fill = "white"),
     panel.grid.major = element_line(colour = "grey90"),
@@ -1269,6 +1287,54 @@ ggsave(
 # ==============================================================================
 #                                    Figures                                   #
 # ==============================================================================
+
+
+## Check urbn_type & elderly ===================================================
+check_urbnType_elderly <- data.table::as.data.table(harm_socioeconomic_nuts_sf) %>% 
+  dplyr::filter(sex == 'Both') %>% 
+  dplyr::select(geo, urbn_type, per_elderly) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+print(check_urbnType_elderly %>% 
+        dplyr::group_by(urbn_type) %>% 
+        dplyr::summarise(mean_per_elderly = mean(per_elderly)) %>% 
+        dplyr::ungroup())
+# urbn_type   mean_per_elderly
+# City                   0.196
+# Town/Suburb            0.204
+# Rural                  0.223
+
+
+## Check urbn_type & income ====================================================
+check_urbnType_income <- data.table::as.data.table(harm_socioeconomic_nuts_sf) %>% 
+  dplyr::filter(sex == 'Both') %>% 
+  dplyr::select(geo, urbn_type, income = Disp_Inc_P_nuts3) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+print(check_urbnType_income %>% 
+        dplyr::group_by(urbn_type) %>% 
+        dplyr::summarise(mean_income = mean(income)) %>% 
+        dplyr::ungroup())
+# urbn_type         mean_income
+# City                   19073
+# Town/Suburb            17142
+# Rural                  15421
+
+
+## Check urbn_type & cdd =======================================================
+check_urbnType_cdd <- data.table::as.data.table(harm_socioeconomic_nuts_sf) %>% 
+  dplyr::filter(sex == 'Both') %>% 
+  dplyr::select(geo, urbn_type, cdd = CDD) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+print(check_urbnType_cdd %>% 
+        dplyr::group_by(urbn_type) %>% 
+        dplyr::summarise(mean_cdd = mean(cdd)) %>% 
+        dplyr::ungroup())
+# urbn_type          mean_cdd
+# City                   102.
+# Town/Suburb            80.8
+# Rural                  89.9
 
 ## Figure 2 ====================================================================
 
@@ -1349,7 +1415,7 @@ pl <- ggplot(data,
   geom_point() +
   # scale_color_manual(values = viridis::viridis(n = split_num, option = "cividis")) +
   scale_color_manual(values = RColorBrewer::brewer.pal(n = split_num, name = "RdYlBu")) +
-  labs(x = "Premture deaths [NR]", y = "", fill = "Decile") +
+  labs(x = "Premture deaths [M Normalized]", y = "", fill = "Decile") +
   theme_minimal()
 ggsave(
   file = paste0("figures/fig_deaths_var",normalized_tag,".pdf"), height = 20, width = 20, units = "cm",

@@ -59,7 +59,7 @@ sf::st_write(gdp_sf, "data/tmp/gdp_sf.shp", append = FALSE)
 
 
 #### rfasst population data ====================================================
-# Source: rfasst pkg, dev_k branch
+# Source: rfasst pkg, dev_k branch population in million
 rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
   dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
@@ -380,7 +380,7 @@ harm_socioeconomic_nuts_sf <- data.table::as.data.table(urbn_type) %>%
   dplyr::full_join(data.table::as.data.table(rfasst_pop %>% 
                                                dplyr::filter(year == 2020,
                                                              geo %in% unique(urbn_type$geo)) %>% 
-                                               dplyr::select(geo, age, sex, pop100K = pop)), 
+                                               dplyr::select(geo, age, sex, popM = pop)), 
                    by = c("geo","sex")) %>% 
   dplyr::full_join(data.table::as.data.table(harm_data_nuts3_sf) %>%
     dplyr::select(-geometry), by = "geo") %>%

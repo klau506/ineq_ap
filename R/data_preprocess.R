@@ -216,7 +216,7 @@ grid_sf_elderly_v2 <- as.data.frame(rfasst_pop) %>%
   dplyr::mutate(per_elderly = Y_GE65 / Y_TOT) %>%
   as.data.frame()
   # merge with NUTS3 geometries
-grid_sf_elderly_v2 <- nuts3_plot_data %>%
+grid_sf_elderly_v3 <- nuts3_plot_data %>%
     dplyr::select(geo, geometry) %>% 
     dplyr::left_join(
       grid_sf_elderly_v2,
@@ -224,7 +224,7 @@ grid_sf_elderly_v2 <- nuts3_plot_data %>%
       ) %>% 
     dplyr::filter(rowSums(is.na(.)) == 0)
       
-grid_sf_elderly_v2 <- sf::st_sf(grid_sf_elderly_v2, geometry = grid_sf_elderly_v2$geometry)
+grid_sf_elderly_v3 <- sf::st_sf(grid_sf_elderly_v3, geometry = grid_sf_elderly_v3$geometry)
 
 plot_elderly <- tm_shape(nuts3_plot_data,
   projection = "EPSG:3035",
@@ -232,7 +232,7 @@ plot_elderly <- tm_shape(nuts3_plot_data,
   ylim = c(1320000, 5650000)
 ) +
   tm_fill("lightgrey") +
-  tm_shape(grid_sf_elderly_v2 %>% 
+  tm_shape(grid_sf_elderly_v3 %>% 
              dplyr::filter(year == 2020, sex == 'Both')) +
   tm_polygons("per_elderly",
     title = "Elderly people [%]",
@@ -330,11 +330,15 @@ tmap::tmap_save(plot_cdd,
 harm_socioeconomic_nuts_sf <- data.table::as.data.table(urbn_type) %>%
   dplyr::full_join(data.table::as.data.table(grid_sf_cdd_v2) %>%
     dplyr::select(-geometry), by = "geo") %>%
+  dplyr::full_join(data.table::as.data.table(grid_sf_elderly_v3) %>%
+                     dplyr::filter(year == 2020) %>% 
+                     dplyr::select(geo, sex, per_elderly), 
+                   by = "geo") %>%
   dplyr::full_join(data.table::as.data.table(rfasst_pop %>% 
                                                dplyr::filter(year == 2020,
                                                              geo %in% unique(urbn_type$geo)) %>% 
                                                dplyr::select(geo, age, sex, pop100K = pop)), 
-                   by = "geo") %>% 
+                   by = c("geo","sex")) %>% 
   dplyr::full_join(data.table::as.data.table(harm_data_nuts3_sf) %>%
     dplyr::select(-geometry), by = "geo") %>%
   # merge with NUTS3 geometries

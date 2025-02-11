@@ -14,17 +14,17 @@ normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
 
 ## load dummy PM2.5 concentration & premature deaths by NUTS3 ==================
 ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>% 
-  dplyr::filter(year == 2020)
+  dplyr::filter(year == 2030)
 deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output", normalized_tag, ".RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
-  dplyr::filter(year == 2020)
+  dplyr::filter(year == 2030)
 
 ## load socioeconomic data =====================================================
 new_colnames <- c(
-  "urbn_type" = "URBN_TY", "geo" = "geo", "mean_per_elderly" = "mn_pr_l",
-  "Year" = "Year", "ISO" = "ISO", "Population_nuts3" = "Ppltn_3",
-  "Disp_Inc_P_nuts3" = "D_I_P_3", "Gini_nuts3" = "Gn_nts3",
-  "geometry" = "geometry"
+  "geo" = "geo", "urbn_type" = "urbn_ty", "CDD" = "CDD", "HDD" = "HDD",
+  "sex" = "sex", "per_elderly" = "pr_ldrl", "age" = "age", "pop100K" = "pop100K" ,
+  "year" = "Year", "iso" = "ISO", "Pop_nuts3" = "Ppltn_3", "Disp_Inc_P_nuts3" = "D_I_P_3",
+  "Gini_nuts3" = "Gn_nts3", "geometry" = "geometry"
 )
 harm_socioeconomic_nuts_sf <- sf::st_read("data/tmp/harm_socioeconomic_nuts_sf.shp") %>%
   dplyr::rename(new_colnames)
@@ -39,8 +39,7 @@ nuts3_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level 
 ## AP  =========================================================================
 ap_nuts3 <- ap %>%
   dplyr::filter(
-    nchar(region) > 3,
-    year == 2020
+    nchar(region) > 3
   ) %>%
   dplyr::rename(
     geo = region,
@@ -60,8 +59,7 @@ plot_ap <- tm_shape(nuts3_plot_data,
   ylim = c(1320000, 5650000)
 ) +
   tm_fill("lightgrey") +
-  tm_shape(ap_nuts3_sf %>%
-    dplyr::filter(year == 2020)) +
+  tm_shape(ap_nuts3_sf) +
   tm_polygons("ap",
     title = "PM2.5\n[ug/m3]",
     palette = "Oranges",
@@ -71,7 +69,7 @@ plot_ap <- tm_shape(nuts3_plot_data,
   tm_layout(legend.text.size = 0.6)
 
 tmap::tmap_save(plot_ap,
-  filename = paste0("figures/plot_ap", normalized_tag, ".pdf"),
+  filename = paste0("figures/plot_ap.pdf"),
   width = 100, height = 100, units = "mm", dpi = 300
 )
 
@@ -104,7 +102,6 @@ plot_deaths <- tm_shape(nuts3_plot_data,
   tm_fill("lightgrey") +
   tm_shape(deaths_nuts3_sf %>%
     dplyr::filter(
-      year == 2020,
       sex == "Both"
     )) +
   tm_polygons("deaths",
@@ -131,8 +128,7 @@ harm_data_geo_urbn <- unique(harm_data_geo_urbn)
 
 ap_deaths_nuts3 <- deaths %>%
   dplyr::filter(
-    nchar(region) > 3,
-    age == ">25"
+    nchar(region) > 3
   ) %>%
   dplyr::rename(
     geo = region,
@@ -184,7 +180,7 @@ ap_urbntype_sf <- sf::st_join(
     dplyr::select(geo, urbn_type, geometry) %>%
     dplyr::filter(rowSums(is.na(.)) == 0),
   ap_nuts3_sf %>%
-    dplyr::select(-urbn_type, -geo)
+    dplyr::select(-URBN_TYPE, -geo)
 ) %>%
   dplyr::select(geo, urbn_type, ap, geometry)
 
@@ -260,23 +256,105 @@ plot_urbntype_density <- ggplot(df) +
   )
 
 ggsave(
-  file = paste0("figures/plot_urbntype_density_ap", normalized_tag, ".pdf"), height = 15, width = 15, units = "cm",
+  file = paste0("figures/plot_urbntype_density_ap.pdf"), height = 15, width = 15, units = "cm",
   plot = plot_urbntype_density
 )
 
 
+
+## AP vs CDD ===========================================================
+
+# check normality
+ap_cdd_sf <- sf::st_join(
+  harm_socioeconomic_nuts_sf %>%
+    dplyr::select(geo, CDD, geometry) %>%
+    dplyr::filter(rowSums(is.na(.)) == 0),
+  ap_nuts3_sf %>%
+    dplyr::select(ap, geometry)
+) %>%
+  dplyr::select(geo, cdd = CDD, ap, geometry)
+
+ap_cdd <- data.table::as.data.table(ap_cdd_sf) %>%
+  dplyr::select(-geometry) %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  # remove outliers(>95%)
+  dplyr::filter(ap <= quantile(ap, probs = 0.95))
+
+# Histogram
+ggplot(ap_cdd, aes(x = ap)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  theme(legend.position = "none")
+
+# Q-Q plot
+ggplot(ap_cdd, aes(sample = ap)) +
+  stat_qq() +
+  stat_qq_line() +
+  theme(legend.position = "none")
+
+ap_cdd <- ap_cdd %>%
+  dplyr::mutate(mean_cdd_decile = as.factor(dplyr::ntile(cdd, 5)))
+
+ap_cdd_medi <- ap_cdd[, .(medi = quantile(ap, 0.5, na.rm = T)),
+                              by = c("mean_cdd_decile")
+]
+
+plot_cdd_density_ap <- ggplot(ap_cdd) +
+  geom_density(
+    data = ap_cdd, aes(
+      x = ap, group = mean_cdd_decile,
+      color = mean_cdd_decile, fill = mean_cdd_decile
+    ),
+    linewidth = 0.8, alpha = 0.25
+  ) +
+  geom_vline(aes(color = mean_cdd_decile, xintercept = medi),
+             data = ap_cdd_medi, linewidth = 1
+  ) +
+  facet_wrap(. ~ mean_cdd_decile,
+             nrow = 5,
+             labeller = as_labeller(quintiles.labs)
+  ) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(
+    values = quintiles.color,
+    name = "CDD [NR]",
+    labels = quintiles.labs
+  ) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "CDD [NR]",
+    labels = quintiles.labs
+  ) +
+  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = 12),
+    strip.background = element_blank(),
+    axis.title.x = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "cm"),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.position = "bottom"
+  )
+
+ggsave(
+  file = paste0("figures/plot_cdd_density_ap.pdf"), height = 30, width = 20, units = "cm",
+  plot = plot_cdd_density_ap
+)
 
 ## AP vs ELDERLY ===============================================================
 
 # check normality
 ap_elderly_sf <- sf::st_join(
   harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, mean_per_elderly, geometry) %>%
+    dplyr::select(geo, per_elderly, geometry) %>%
     dplyr::filter(rowSums(is.na(.)) == 0),
   ap_nuts3_sf %>%
     dplyr::select(ap, geometry)
 ) %>%
-  dplyr::select(geo, mean_per_elderly, ap, geometry)
+  dplyr::select(geo, per_elderly, ap, geometry)
 
 ap_elderly <- data.table::as.data.table(ap_elderly_sf) %>%
   dplyr::select(-geometry) %>%
@@ -285,14 +363,14 @@ ap_elderly <- data.table::as.data.table(ap_elderly_sf) %>%
 # Histogram
 ggplot(ap_elderly, aes(x = ap)) +
   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~mean_per_elderly) %>%
+  facet_wrap(~per_elderly) %>%
   theme(legend.position = "none")
 
 # Q-Q plot
 ggplot(ap_elderly, aes(sample = ap)) +
   stat_qq() +
   stat_qq_line() +
-  facet_wrap(~mean_per_elderly) %>%
+  facet_wrap(~per_elderly) %>%
   theme(legend.position = "none")
 
 # Anderson-Darling Test
@@ -300,35 +378,35 @@ test <- nortest::ad.test(ap_elderly$ap)
 # A = 73.063, p-value < 2.2e-16 --> NOT normal distribution
 
 # Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(ap ~ mean_per_elderly, data = ap_elderly_sf)
+test <- kruskal.test(ap ~ per_elderly, data = ap_elderly_sf)
 # Kruskal-Wallis chi-squared = 7255.4, df = 1199, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(ap_elderly_sf), ap ~ mean_per_elderly)
+rstatix::kruskal_effsize(data = as.data.frame(ap_elderly_sf), ap ~ per_elderly)
 # .y.       n effsize method  magnitude
 # * <chr> <int>   <dbl> <chr>   <ord>
 #   ap     8928   0.784 eta2[H] large
-# Result: the effect of the mean_per_elderly is SIGNIFICANT and LARGE
+# Result: the effect of the per_elderly is SIGNIFICANT and LARGE
 
 
 
 ap_elderly <- ap_elderly %>%
-  dplyr::mutate(mean_per_elderly_decile = as.factor(ntile(mean_per_elderly, 5)))
+  dplyr::mutate(per_elderly_decile = as.factor(dplyr::ntile(per_elderly, 5)))
 
 ap_elderly_medi <- ap_elderly[, .(medi = quantile(ap, 0.5, na.rm = T)),
-  by = c("mean_per_elderly_decile")
+  by = c("per_elderly_decile")
 ]
 
 plot_elderly_density <- ggplot(ap_elderly) +
   geom_density(
     data = ap_elderly, aes(
-      x = ap, group = mean_per_elderly_decile,
-      color = mean_per_elderly_decile, fill = mean_per_elderly_decile
+      x = ap, group = per_elderly_decile,
+      color = per_elderly_decile, fill = per_elderly_decile
     ),
     linewidth = 0.8, alpha = 0.25
   ) +
-  geom_vline(aes(color = mean_per_elderly_decile, xintercept = medi),
+  geom_vline(aes(color = per_elderly_decile, xintercept = medi),
     data = ap_elderly_medi, linewidth = 1
   ) +
-  facet_wrap(. ~ mean_per_elderly_decile, nrow = 5) +
+  facet_wrap(. ~ per_elderly_decile, nrow = 5) +
   ggpubr::theme_pubr() +
   scale_fill_manual(
     values = quintiles.color,
@@ -356,10 +434,180 @@ plot_elderly_density <- ggplot(ap_elderly) +
   )
 
 ggsave(
-  file = paste0("figures/plot_elderly_density_ap", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+  file = paste0("figures/plot_elderly_density_ap.pdf"), height = 30, width = 20, units = "cm",
   plot = plot_elderly_density
 )
 
+## AP vs INCOME ============================================================
+
+# check normality
+ap_income_sf <- sf::st_join(
+  harm_socioeconomic_nuts_sf %>%
+    dplyr::select(geo, income = Disp_Inc_P_nuts3, geometry) %>%
+    dplyr::filter(rowSums(is.na(.)) == 0),
+  ap_nuts3_sf %>%
+    dplyr::select(ap, geometry)
+) %>%
+  dplyr::select(geo, income, ap, geometry)
+
+ap_income <- data.table::as.data.table(ap_income_sf) %>%
+  dplyr::select(-geometry) %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  # remove outliers(>95%)
+  dplyr::filter(ap <= quantile(ap, probs = 0.95))
+
+# Histogram
+ggplot(ap_income, aes(x = ap)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~income) %>%
+  theme(legend.position = "none")
+
+# Q-Q plot
+ggplot(ap_income, aes(sample = ap)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~income) %>%
+  theme(legend.position = "none")
+
+
+
+ap_income <- ap_income %>%
+  dplyr::mutate(income_decile = as.factor(dplyr::ntile(income, 5)))
+
+ap_elderly_medi <- ap_income[, .(medi = quantile(ap, 0.5, na.rm = T)),
+                                     by = c("income_decile")
+]
+
+plot_income_density_ap <- ggplot(ap_income) +
+  geom_density(
+    data = ap_income, aes(
+      x = ap, group = income_decile,
+      color = income_decile, fill = income_decile
+    ),
+    linewidth = 0.8, alpha = 0.25
+  ) +
+  geom_vline(aes(color = income_decile, xintercept = medi),
+             data = ap_elderly_medi, linewidth = 1
+  ) +
+  facet_wrap(. ~ income_decile,
+             nrow = 5,
+             labeller = as_labeller(quintiles.labs)
+  ) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(
+    values = quintiles.color,
+    name = "Income Quintiles [2015 PPP]",
+    labels = quintiles.labs
+  ) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "Income Quintiles [2015 PPP]",
+    labels = quintiles.labs
+  ) +
+  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = 12),
+    strip.background = element_blank(),
+    axis.title.x = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "cm"),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.position = "bottom"
+  )
+
+ggsave(
+  file = paste0("figures/plot_income_density_ap.pdf"), height = 30, width = 20, units = "cm",
+  plot = plot_income_density_ap
+)
+
+## AP vs GINI ============================================================
+
+# check normality
+ap_gini_sf <- sf::st_join(
+  harm_socioeconomic_nuts_sf %>%
+    dplyr::select(geo, gini = Gini_nuts3, geometry) %>%
+    dplyr::filter(rowSums(is.na(.)) == 0),
+  ap_nuts3_sf %>%
+    dplyr::select(ap, geometry)
+) %>%
+  dplyr::select(geo, gini, ap, geometry)
+
+ap_gini <- data.table::as.data.table(ap_gini_sf) %>%
+  dplyr::select(-geometry) %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  # remove outliers(>95%)
+  dplyr::filter(ap <= quantile(ap, probs = 0.95))
+
+# Histogram
+ggplot(ap_gini, aes(x = ap)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~gini) %>%
+  theme(legend.position = "none")
+
+# Q-Q plot
+ggplot(ap_gini, aes(sample = ap)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~gini) %>%
+  theme(legend.position = "none")
+
+
+ap_gini <- ap_gini %>%
+  dplyr::mutate(gini_decile = as.factor(dplyr::ntile(gini, 5)))
+
+ap_elderly_medi <- ap_gini[, .(medi = quantile(ap, 0.5, na.rm = T)),
+                                   by = c("gini_decile")
+]
+
+plot_gini_density_ap <- ggplot(ap_gini) +
+  geom_density(
+    data = ap_gini, aes(
+      x = ap, group = gini_decile,
+      color = gini_decile, fill = gini_decile
+    ),
+    linewidth = 0.8, alpha = 0.25
+  ) +
+  geom_vline(aes(color = gini_decile, xintercept = medi),
+             data = ap_elderly_medi, linewidth = 1
+  ) +
+  facet_wrap(. ~ gini_decile,
+             nrow = 5,
+             labeller = as_labeller(quintiles.labs)
+  ) +
+  ggpubr::theme_pubr() +
+  scale_fill_manual(
+    values = quintiles.color,
+    name = "Gini Quintiles [Index]",
+    labels = quintiles.labs
+  ) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "Gini Quintiles [Index]",
+    labels = quintiles.labs
+  ) +
+  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = 12),
+    strip.background = element_blank(),
+    axis.title.x = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.key.size = unit(1.5, "cm"),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    legend.position = "bottom"
+  )
+
+ggsave(
+  file = paste0("figures/plot_gini_density_ap.pdf"), height = 30, width = 20, units = "cm",
+  plot = plot_gini_density_ap
+)
 ## DEATHS vs urbn_type ===========================================================
 
 # check normality
@@ -499,7 +747,7 @@ rstatix::kruskal_effsize(data = as.data.frame(deaths_cdd_sf), deaths ~ cdd)
 
 
 deaths_cdd <- deaths_cdd %>%
-  dplyr::mutate(mean_cdd_decile = as.factor(ntile(cdd, 5)))
+  dplyr::mutate(mean_cdd_decile = as.factor(dplyr::ntile(cdd, 5)))
 
 deaths_cdd_medi <- deaths_cdd[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("mean_cdd_decile")
@@ -556,12 +804,12 @@ ggsave(
 # check normality
 deaths_elderly_sf <- sf::st_join(
   harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, mean_per_elderly, geometry) %>%
+    dplyr::select(geo, per_elderly, geometry) %>%
     dplyr::filter(rowSums(is.na(.)) == 0),
   deaths_nuts3_sf %>%
     dplyr::select(deaths, geometry)
 ) %>%
-  dplyr::select(geo, mean_per_elderly, deaths, geometry)
+  dplyr::select(geo, per_elderly, deaths, geometry)
 
 deaths_elderly <- data.table::as.data.table(deaths_elderly_sf) %>%
   dplyr::select(-geometry) %>%
@@ -572,14 +820,14 @@ deaths_elderly <- data.table::as.data.table(deaths_elderly_sf) %>%
 # Histogram
 ggplot(deaths_elderly, aes(x = deaths)) +
   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-  facet_wrap(~mean_per_elderly) %>%
+  facet_wrap(~per_elderly) %>%
   theme(legend.position = "none")
 
 # Q-Q plot
 ggplot(deaths_elderly, aes(sample = deaths)) +
   stat_qq() +
   stat_qq_line() +
-  facet_wrap(~mean_per_elderly) %>%
+  facet_wrap(~per_elderly) %>%
   theme(legend.position = "none")
 
 # Anderson-Darling Test
@@ -587,35 +835,35 @@ test <- nortest::ad.test(deaths_elderly$deaths)
 # A = 3366, p-value < 2.2e-16 --> NOT normal distribution
 
 # Kruskal-Wallis Test (for >2 categories) - non parametric test
-test <- kruskal.test(deaths ~ mean_per_elderly, data = deaths_elderly_sf)
+test <- kruskal.test(deaths ~ per_elderly, data = deaths_elderly_sf)
 # Kruskal-Wallis chi-squared = 61598, df = 1169, p-value < 2.2e-16
-rstatix::kruskal_effsize(data = as.data.frame(deaths_elderly_sf), deaths ~ mean_per_elderly)
+rstatix::kruskal_effsize(data = as.data.frame(deaths_elderly_sf), deaths ~ per_elderly)
 # .y.       n effsize method  magnitude
 # * <chr> <int>   <dbl> <chr>   <ord>
 #   deaths 127621   0.478 eta2[H] large
-# Result: the effect of the mean_per_elderly is SIGNIFICANT and LARGE
+# Result: the effect of the per_elderly is SIGNIFICANT and LARGE
 
 
 
 deaths_elderly <- deaths_elderly %>%
-  dplyr::mutate(mean_per_elderly_decile = as.factor(ntile(mean_per_elderly, 5)))
+  dplyr::mutate(per_elderly_decile = as.factor(dplyr::ntile(per_elderly, 5)))
 
 deaths_elderly_medi <- deaths_elderly[, .(medi = quantile(deaths, 0.5, na.rm = T)),
-  by = c("mean_per_elderly_decile")
+  by = c("per_elderly_decile")
 ]
 
 plot_elderly_density_deaths <- ggplot(deaths_elderly) +
   geom_density(
     data = deaths_elderly, aes(
-      x = deaths, group = mean_per_elderly_decile,
-      color = mean_per_elderly_decile, fill = mean_per_elderly_decile
+      x = deaths, group = per_elderly_decile,
+      color = per_elderly_decile, fill = per_elderly_decile
     ),
     linewidth = 0.8, alpha = 0.25
   ) +
-  geom_vline(aes(color = mean_per_elderly_decile, xintercept = medi),
+  geom_vline(aes(color = per_elderly_decile, xintercept = medi),
     data = deaths_elderly_medi, linewidth = 1
   ) +
-  facet_wrap(. ~ mean_per_elderly_decile,
+  facet_wrap(. ~ per_elderly_decile,
     nrow = 5,
     labeller = as_labeller(quintiles.labs)
   ) +
@@ -697,7 +945,7 @@ rstatix::kruskal_effsize(data = as.data.frame(deaths_income_sf), deaths ~ income
 
 
 deaths_income <- deaths_income %>%
-  dplyr::mutate(income_decile = as.factor(ntile(income, 5)))
+  dplyr::mutate(income_decile = as.factor(dplyr::ntile(income, 5)))
 
 deaths_elderly_medi <- deaths_income[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("income_decile")
@@ -796,7 +1044,7 @@ rstatix::kruskal_effsize(data = as.data.frame(deaths_gini_sf), deaths ~ gini)
 
 
 deaths_gini <- deaths_gini %>%
-  dplyr::mutate(gini_decile = as.factor(ntile(gini, 5)))
+  dplyr::mutate(gini_decile = as.factor(dplyr::ntile(gini, 5)))
 
 deaths_elderly_medi <- deaths_gini[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("gini_decile")

@@ -7,7 +7,8 @@ source("R/utils.R")
 source("R/zzz.R")
 
 normalized <- T
-split_num <- 10 #10 deciles, 5 quintiles
+split_num <- 5 #10 deciles, 5 quintiles
+map <- T #T if plotted and saved, F otherwise
 # ==============================================================================
 #                                  LOAD DATA                                   #
 # ==============================================================================
@@ -16,8 +17,14 @@ normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
 ## load dummy PM2.5 concentration & premature deaths by NUTS3 ==================
 rfasst_pop <- get(load("data/tmp/rfasst_pop.RData"))
 
-ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>% 
-  dplyr::filter(year == 2030)
+ap <- get(load("data/rfasst_output/check_layer.RData")) %>% 
+  dplyr::mutate(units = 'ug/m3',
+                scenario = 'layer',
+                level = 'WORLD-NUTS3') %>% 
+  dplyr::rename(region = 'id_code',
+                value = pm)
+# ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
+#   dplyr::filter(year == 2030)
 deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
   dplyr::filter(year == 2030)
@@ -81,25 +88,28 @@ if (nrow(ap_nuts3[rowSums(is.na(ap_nuts3)) > 0, ]) != 0) {
   warning("There are not-matching NUTS3 codes between the rfasst AP results and EUROSTAT NUTS3 data")
 }
 
-plot_ap <- tm_shape(nuts3_plot_data,
-  projection = "EPSG:3035",
-  xlim = c(2400000, 6500000),
-  ylim = c(1320000, 5650000)
-) +
-  tm_fill("lightgrey") +
-  tm_shape(ap_nuts3_sf) +
-  tm_polygons("ap",
-    title = "PM2.5\n[ug/m3]",
-    palette = "Oranges",
-    style = "cont"
+if (map) {
+  plot_ap <- tm_shape(nuts3_plot_data,
+    projection = "EPSG:3035",
+    xlim = c(2400000, 6500000),
+    ylim = c(1320000, 5650000)
   ) +
-  tm_layout(legend.title.size = 0.8) +
-  tm_layout(legend.text.size = 0.6)
-
-tmap::tmap_save(plot_ap,
-  filename = paste0("figures/plot_ap.pdf"),
-  width = 100, height = 100, units = "mm", dpi = 300
-)
+    tm_fill("lightgrey") +
+    tm_shape(ap_nuts3_sf) +
+    tm_polygons("ap",
+      title = "PM2.5\n[ug/m3]",
+      palette = "Oranges",
+      style = "cont",
+      lwd = 0.5
+    ) +
+    tm_layout(legend.title.size = 0.8) +
+    tm_layout(legend.text.size = 0.6)
+  
+  tmap::tmap_save(plot_ap,
+    filename = paste0("figures/plot_ap.pdf"),
+    width = 100, height = 100, units = "mm", dpi = 300
+  )
+}
 
 ## DEATHS  =====================================================================
 deaths_nuts3 <- deaths %>%
@@ -110,9 +120,6 @@ deaths_nuts3 <- deaths %>%
     geo = region,
     deaths = value
   ) %>%
-  dplyr::group_by(geo, year, sex, scenario) %>%
-  dplyr::summarise(deaths = sum(deaths)) %>%
-  dplyr::ungroup() %>%
   dplyr::left_join(nuts3_plot_data,
     by = "geo"
   )
@@ -121,36 +128,35 @@ if (nrow(deaths_nuts3[rowSums(is.na(deaths_nuts3)) > 0, ]) != 0) {
   warning("There are not-matching NUTS3 codes between the rfasst MORT results and EUROSTAT NUTS3 data")
 }
 
-plot_deaths <- 
-  tm_shape(nuts3_plot_data,
-  projection = "EPSG:3035",
-  xlim = c(2400000, 6500000),
-  ylim = c(1320000, 5650000)
-) +
-  tm_fill("lightgrey") +
-  tm_shape(deaths_nuts3_sf %>%
-    dplyr::filter(
-      sex == "Both"
-    )) +
-  tm_polygons("deaths",
-    title = "Premature deaths\n[Normalized M]",
-    palette = "Oranges",
-    style = "cont"
+if (map) {
+  plot_deaths <- 
+    tm_shape(nuts3_plot_data,
+    projection = "EPSG:3035",
+    xlim = c(2400000, 6500000),
+    ylim = c(1320000, 5650000)
   ) +
-  tm_layout(legend.title.size = 0.8) +
-  tm_layout(legend.text.size = 0.6)
-
-tmap::tmap_save(plot_deaths,
-  filename = paste0("figures/plot_deaths", normalized_tag, ".pdf"),
-  width = 100, height = 100, units = "mm", dpi = 300
-)
-
-
-
+    tm_fill("lightgrey") +
+    tm_shape(deaths_nuts3_sf %>%
+      dplyr::filter(
+        sex == "Both"
+      )) +
+    tm_polygons("deaths",
+      title = "Premature deaths\n[Normalized M]",
+      palette = "Oranges",
+      style = "cont",       lwd = 0.5
+    ) +
+    tm_layout(legend.title.size = 0.8) +
+    tm_layout(legend.text.size = 0.6)
+  
+  tmap::tmap_save(plot_deaths,
+    filename = paste0("figures/plot_deaths", normalized_tag, ".pdf"),
+    width = 100, height = 100, units = "mm", dpi = 300
+  )
+}
 
 
 ## AP vs DEATHS  ===============================================================
-harm_data_geo_urbn <- harm_socioeconomic_nuts_sf %>%
+harm_data_geo_urbn <- data.table::as.data.table(harm_socioeconomic_nuts_sf) %>%
   dplyr::select(geo, urbn_type)
 harm_data_geo_urbn <- unique(harm_data_geo_urbn)
 
@@ -170,7 +176,7 @@ ap_deaths_nuts3 <- deaths %>%
                        geo = region,
                        ap = value
                      ) %>% 
-                     dplyr::mutate(year = as.numeric(year)) %>% 
+                     dplyr::mutate(year = as.numeric(year)) %>%
                      dplyr::select(geo, scenario, ap),
                    by = c('geo','scenario')) %>% 
   dplyr::left_join(harm_data_geo_urbn %>% 
@@ -182,20 +188,21 @@ ap_deaths_nuts3 <- deaths %>%
                    by = "geo"
   )
   
-
-plot_deaths_ap <- 
-  ggplot(ap_deaths_nuts3 %>% 
-         dplyr::filter(deaths != 0,
-                       sex == 'Both'), 
-       aes(x = deaths, y = ap, color = CNTR_CODE, shape = urbn_type)) +
-  geom_point(alpha = 0.5, size = 2) +
-  theme_minimal() +
-  labs(x = "Premature deaths [normalized million]", y = "PM2.5 concentration [ug/m3]")
-
-ggsave(
-  file = paste0("figures/plot_deaths_ap", normalized_tag, ".pdf"), height = 15, width = 15, units = "cm",
-  plot = plot_deaths_ap
-)
+if (map) {
+  plot_deaths_ap <- 
+    ggplot(ap_deaths_nuts3 %>% 
+           dplyr::filter(deaths != 0,
+                         sex == 'Both'), 
+         aes(x = deaths, y = ap, color = CNTR_CODE, shape = urbn_type)) +
+    geom_point(alpha = 0.5, size = 2) +
+    theme_minimal() +
+    labs(x = "Premature deaths [normalized million]", y = "PM2.5 concentration [ug/m3]")
+  
+  ggsave(
+    file = paste0("figures/plot_deaths_ap", normalized_tag, ".pdf"), height = 15, width = 15, units = "cm",
+    plot = plot_deaths_ap
+  )
+}
 
 
 ## AP vs urbn_type  ============================================================
@@ -242,49 +249,50 @@ df_medi <- df[, .(medi = quantile(ap, 0.5, na.rm = T)),
 
 df <- data.table::data.table(df)
 
-plot_urbntype_density <- ggplot(df) +
-  geom_density(
-    data = df, aes(
-      x = ap, group = urbn_type,
-      color = urbn_type, fill = urbn_type
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = urbn_type, xintercept = medi),
-    data = df_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ urbn_type, nrow = 3) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  scale_color_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_urbntype_density <- ggplot(df) +
+    geom_density(
+      data = df, aes(
+        x = ap, group = urbn_type,
+        color = urbn_type, fill = urbn_type
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = urbn_type, xintercept = medi),
+      data = df_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ urbn_type, nrow = 3) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = urbn_type.color,
+      name = "Urban type",
+      labels = urbn_type.labs
+    ) +
+    scale_color_manual(
+      values = urbn_type.color,
+      name = "Urban type",
+      labels = urbn_type.labs
+    ) +
+    labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_urbntype_density_ap.pdf"), height = 15, width = 15, units = "cm",
+    plot = plot_urbntype_density
   )
-
-ggsave(
-  file = paste0("figures/plot_urbntype_density_ap.pdf"), height = 15, width = 15, units = "cm",
-  plot = plot_urbntype_density
-)
-
+}
 
 
 ## AP vs CDD ===========================================================
@@ -323,51 +331,54 @@ ap_cdd_medi <- ap_cdd[, .(medi = quantile(ap, 0.5, na.rm = T)),
                               by = c("mean_cdd_decile")
 ]
 
-plot_cdd_density_ap <- ggplot(ap_cdd) +
-  geom_density(
-    data = ap_cdd, aes(
-      x = ap, group = mean_cdd_decile,
-      color = mean_cdd_decile, fill = mean_cdd_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = mean_cdd_decile, xintercept = medi),
-             data = ap_cdd_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ mean_cdd_decile,
-             nrow = 5,
-             labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "CDD [NR]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "CDD [NR]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
-  )
 
-ggsave(
-  file = paste0("figures/plot_cdd_density_ap.pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_cdd_density_ap
-)
+if (map) {
+  plot_cdd_density_ap <- ggplot(ap_cdd) +
+    geom_density(
+      data = ap_cdd, aes(
+        x = ap, group = mean_cdd_decile,
+        color = mean_cdd_decile, fill = mean_cdd_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = mean_cdd_decile, xintercept = medi),
+               data = ap_cdd_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ mean_cdd_decile,
+               nrow = 5,
+               labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "CDD [NR]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "CDD [NR]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_cdd_density_ap.pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_cdd_density_ap
+  )
+}
 
 ## AP vs ELDERLY ===============================================================
 
@@ -418,48 +429,51 @@ ap_elderly_medi <- ap_elderly[, .(medi = quantile(ap, 0.5, na.rm = T)),
   by = c("per_elderly_decile")
 ]
 
-plot_elderly_density <- ggplot(ap_elderly) +
-  geom_density(
-    data = ap_elderly, aes(
-      x = ap, group = per_elderly_decile,
-      color = per_elderly_decile, fill = per_elderly_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = per_elderly_decile, xintercept = medi),
-    data = ap_elderly_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ per_elderly_decile, nrow = 5) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Elderly population [%]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Elderly population [%]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
-  )
 
-ggsave(
-  file = paste0("figures/plot_elderly_density_ap.pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_elderly_density
-)
+if (map) {
+  plot_elderly_density <- ggplot(ap_elderly) +
+    geom_density(
+      data = ap_elderly, aes(
+        x = ap, group = per_elderly_decile,
+        color = per_elderly_decile, fill = per_elderly_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = per_elderly_decile, xintercept = medi),
+      data = ap_elderly_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ per_elderly_decile, nrow = 5) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "Elderly population [%]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Elderly population [%]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_elderly_density_ap.pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_elderly_density
+  )
+}
 
 ## AP vs INCOME ============================================================
 
@@ -500,51 +514,53 @@ ap_income_medi <- ap_income[, .(medi = quantile(ap, 0.5, na.rm = T)),
                                      by = c("income_decile")
 ]
 
-plot_income_density_ap <- ggplot(ap_income) +
-  geom_density(
-    data = ap_income, aes(
-      x = ap, group = income_decile,
-      color = income_decile, fill = income_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = income_decile, xintercept = medi),
-             data = ap_income_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ income_decile,
-             nrow = 5,
-             labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Income Quintiles [2015 PPP]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Income Quintiles [2015 PPP]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_income_density_ap <- ggplot(ap_income) +
+    geom_density(
+      data = ap_income, aes(
+        x = ap, group = income_decile,
+        color = income_decile, fill = income_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = income_decile, xintercept = medi),
+               data = ap_income_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ income_decile,
+               nrow = 5,
+               labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "Income Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Income Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_income_density_ap.pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_income_density_ap
   )
-
-ggsave(
-  file = paste0("figures/plot_income_density_ap.pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_income_density_ap
-)
+}
 
 ## AP vs GDP ============================================================
 
@@ -585,51 +601,53 @@ ap_gdp_medi <- ap_gdp[, .(medi = quantile(ap, 0.5, na.rm = T)),
                                      by = c("gdp_decile")
 ]
 
-plot_gdp_density_ap <- ggplot(ap_gdp) +
-  geom_density(
-    data = ap_gdp, aes(
-      x = ap, group = gdp_decile,
-      color = gdp_decile, fill = gdp_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = gdp_decile, xintercept = medi),
-             data = ap_gdp_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ gdp_decile,
-             nrow = 5,
-             labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "gdp Quintiles [2015 PPP]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "gdp Quintiles [2015 PPP]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_gdp_density_ap <- ggplot(ap_gdp) +
+    geom_density(
+      data = ap_gdp, aes(
+        x = ap, group = gdp_decile,
+        color = gdp_decile, fill = gdp_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = gdp_decile, xintercept = medi),
+               data = ap_gdp_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ gdp_decile,
+               nrow = 5,
+               labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "gdp Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "gdp Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_gdp_density_ap.pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_gdp_density_ap
   )
-
-ggsave(
-  file = paste0("figures/plot_gdp_density_ap.pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_gdp_density_ap
-)
+}
 
 ## AP vs GINI ============================================================
 
@@ -670,51 +688,54 @@ ap_gini_medi <- ap_gini[, .(medi = quantile(ap, 0.5, na.rm = T)),
                                    by = c("gini_decile")
 ]
 
-plot_gini_density_ap <- ggplot(ap_gini) +
-  geom_density(
-    data = ap_gini, aes(
-      x = ap, group = gini_decile,
-      color = gini_decile, fill = gini_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = gini_decile, xintercept = medi),
-             data = ap_gini_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ gini_decile,
-             nrow = 5,
-             labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Gini Quintiles [Index]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Gini Quintiles [Index]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_gini_density_ap <- ggplot(ap_gini) +
+    geom_density(
+      data = ap_gini, aes(
+        x = ap, group = gini_decile,
+        color = gini_decile, fill = gini_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = gini_decile, xintercept = medi),
+               data = ap_gini_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ gini_decile,
+               nrow = 5,
+               labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "Gini Quintiles [Index]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Gini Quintiles [Index]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_gini_density_ap.pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_gini_density_ap
   )
-
-ggsave(
-  file = paste0("figures/plot_gini_density_ap.pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_gini_density_ap
-)
+}
+  
 ## DEATHS vs urbn_type ===========================================================
 
 # check normality
@@ -763,51 +784,53 @@ deaths_urbntype_medi <- deaths_urbntype[, .(medi = quantile(deaths, 0.5, na.rm =
   by = c("urbn_type")
 ]
 
-plot_urbntype_density_deaths <- ggplot(deaths_urbntype) +
-  geom_density(
-    data = deaths_urbntype, aes(
-      x = deaths, group = urbn_type,
-      color = urbn_type, fill = urbn_type
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = urbn_type, xintercept = medi),
-    data = deaths_urbntype_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ urbn_type,
-    nrow = 5,
-    labeller = as_labeller(urbn_type.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  scale_color_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_urbntype_density_deaths <- ggplot(deaths_urbntype) +
+    geom_density(
+      data = deaths_urbntype, aes(
+        x = deaths, group = urbn_type,
+        color = urbn_type, fill = urbn_type
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = urbn_type, xintercept = medi),
+      data = deaths_urbntype_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ urbn_type,
+      nrow = 5,
+      labeller = as_labeller(urbn_type.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = urbn_type.color,
+      name = "Urban type",
+      labels = urbn_type.labs
+    ) +
+    scale_color_manual(
+      values = urbn_type.color,
+      name = "Urban type",
+      labels = urbn_type.labs
+    ) +
+    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_urbntype_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_urbntype_density_deaths
   )
-
-ggsave(
-  file = paste0("figures/plot_urbntype_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_urbntype_density_deaths
-)
+}
 
 ## DEATHS vs CDD ===========================================================
 
@@ -859,51 +882,53 @@ deaths_cdd_medi <- deaths_cdd[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("mean_cdd_decile")
 ]
 
-plot_cdd_density_deaths <- ggplot(deaths_cdd) +
-  geom_density(
-    data = deaths_cdd, aes(
-      x = deaths, group = mean_cdd_decile,
-      color = mean_cdd_decile, fill = mean_cdd_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = mean_cdd_decile, xintercept = medi),
-    data = deaths_cdd_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ mean_cdd_decile,
-    nrow = 5,
-    labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "CDD [NR]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "CDD [NR]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_cdd_density_deaths <- ggplot(deaths_cdd) +
+    geom_density(
+      data = deaths_cdd, aes(
+        x = deaths, group = mean_cdd_decile,
+        color = mean_cdd_decile, fill = mean_cdd_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = mean_cdd_decile, xintercept = medi),
+      data = deaths_cdd_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ mean_cdd_decile,
+      nrow = 5,
+      labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "CDD [NR]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "CDD [NR]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_cdd_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_cdd_density_deaths
   )
-
-ggsave(
-  file = paste0("figures/plot_cdd_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_cdd_density_deaths
-)
+}
 
 ## DEATHS vs ELDERLY ===========================================================
 
@@ -958,51 +983,53 @@ deaths_elderly_medi <- deaths_elderly[, .(medi = quantile(deaths, 0.5, na.rm = T
   by = c("per_elderly_decile")
 ]
 
-plot_elderly_density_deaths <- ggplot(deaths_elderly) +
-  geom_density(
-    data = deaths_elderly, aes(
-      x = deaths, group = per_elderly_decile,
-      color = per_elderly_decile, fill = per_elderly_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = per_elderly_decile, xintercept = medi),
-    data = deaths_elderly_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ per_elderly_decile,
-    nrow = 5,
-    labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Elderly population [%]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Elderly population [%]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_elderly_density_deaths <- ggplot(deaths_elderly) +
+    geom_density(
+      data = deaths_elderly, aes(
+        x = deaths, group = per_elderly_decile,
+        color = per_elderly_decile, fill = per_elderly_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = per_elderly_decile, xintercept = medi),
+      data = deaths_elderly_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ per_elderly_decile,
+      nrow = 5,
+      labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "Elderly population [%]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Elderly population [%]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_elderly_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_elderly_density_deaths
   )
-
-ggsave(
-  file = paste0("figures/plot_elderly_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_elderly_density_deaths
-)
+}
 
 ## DEATHS vs INCOME ============================================================
 
@@ -1056,51 +1083,53 @@ deaths_income_medi <- deaths_income[, .(medi = quantile(deaths, 0.5, na.rm = T))
   by = c("income_decile")
 ]
 
-plot_income_density_deaths <- ggplot(deaths_income) +
-  geom_density(
-    data = deaths_income, aes(
-      x = deaths, group = income_decile,
-      color = income_decile, fill = income_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = income_decile, xintercept = medi),
-    data = deaths_income_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ income_decile,
-    nrow = 5,
-    labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Income Quintiles [2015 PPP]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Income Quintiles [2015 PPP]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_income_density_deaths <- ggplot(deaths_income) +
+    geom_density(
+      data = deaths_income, aes(
+        x = deaths, group = income_decile,
+        color = income_decile, fill = income_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = income_decile, xintercept = medi),
+      data = deaths_income_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ income_decile,
+      nrow = 5,
+      labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "Income Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Income Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_income_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_income_density_deaths
   )
-
-ggsave(
-  file = paste0("figures/plot_income_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_income_density_deaths
-)
+}
 
 ## DEATHS vs GDP ============================================================
 
@@ -1140,51 +1169,53 @@ deaths_gdp_medi <- deaths_gdp[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("gdp_decile")
 ]
 
-plot_gdp_density_deaths <- ggplot(deaths_gdp) +
-  geom_density(
-    data = deaths_gdp, aes(
-      x = deaths, group = gdp_decile,
-      color = gdp_decile, fill = gdp_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = gdp_decile, xintercept = medi),
-    data = deaths_gdp_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ gdp_decile,
-    nrow = 5,
-    labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "gdp Quintiles [2015 PPP]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "gdp Quintiles [2015 PPP]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_gdp_density_deaths <- ggplot(deaths_gdp) +
+    geom_density(
+      data = deaths_gdp, aes(
+        x = deaths, group = gdp_decile,
+        color = gdp_decile, fill = gdp_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = gdp_decile, xintercept = medi),
+      data = deaths_gdp_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ gdp_decile,
+      nrow = 5,
+      labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "gdp Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "gdp Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_gdp_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_gdp_density_deaths
   )
-
-ggsave(
-  file = paste0("figures/plot_gdp_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_gdp_density_deaths
-)
+}
 
 ## DEATHS vs GINI ============================================================
 
@@ -1238,51 +1269,53 @@ deaths_gini_medi <- deaths_gini[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("gini_decile")
 ]
 
-plot_gini_density_deaths <- ggplot(deaths_gini) +
-  geom_density(
-    data = deaths_gini, aes(
-      x = deaths, group = gini_decile,
-      color = gini_decile, fill = gini_decile
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = gini_decile, xintercept = medi),
-    data = deaths_gini_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ gini_decile,
-    nrow = 5,
-    labeller = as_labeller(quintiles.labs)
-  ) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Gini Quintiles [Index]",
-    labels = quintiles.labs
-  ) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Gini Quintiles [Index]",
-    labels = quintiles.labs
-  ) +
-  labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = 12),
-    strip.background = element_blank(),
-    axis.title.x = element_text(size = 12),
-    axis.text = element_text(size = 12),
-    legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.position = "bottom"
+if (map) {
+  plot_gini_density_deaths <- ggplot(deaths_gini) +
+    geom_density(
+      data = deaths_gini, aes(
+        x = deaths, group = gini_decile,
+        color = gini_decile, fill = gini_decile
+      ),
+      linewidth = 0.8, alpha = 0.25
+    ) +
+    geom_vline(aes(color = gini_decile, xintercept = medi),
+      data = deaths_gini_medi, linewidth = 1
+    ) +
+    facet_wrap(. ~ gini_decile,
+      nrow = 5,
+      labeller = as_labeller(quintiles.labs)
+    ) +
+    ggpubr::theme_pubr() +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "Gini Quintiles [Index]",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Gini Quintiles [Index]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/plot_gini_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+    plot = plot_gini_density_deaths
   )
-
-ggsave(
-  file = paste0("figures/plot_gini_density_deaths", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
-  plot = plot_gini_density_deaths
-)
+}
 
 # ==============================================================================
 #                                    Figures                                   #
@@ -1338,6 +1371,7 @@ print(check_urbnType_cdd %>%
 
 ## Figure 2 ====================================================================
 
+# AP
 data_list <- list(
   ap_income_medi %>%
     dplyr::rename_with(~ "decile", contains("decile")) %>%
@@ -1380,6 +1414,8 @@ ggsave(
 )
 
 
+
+# Deaths
 data_list <- list(
   deaths_income_medi %>%
     dplyr::rename_with(~ "decile", contains("decile")) %>%

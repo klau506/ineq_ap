@@ -7,34 +7,39 @@ source("R/utils.R")
 source("R/zzz.R")
 
 normalized <- T
-split_num <- 5 #10 deciles, 5 quintiles
-map <- T #T if plotted and saved, F otherwise
+split_num <- 10 #10 deciles, 5 quintiles
+map <- F #T if plotted and saved, F otherwise
+yy <- 2030
 # ==============================================================================
 #                                  LOAD DATA                                   #
 # ==============================================================================
 normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
+split_num_tag <- dplyr::if_else(split_num == 5, 'quintile', 
+                                dplyr::if_else(split_num == 10, 'decile',
+                                               paste0('split_num_',split_num)))
 
 ## load dummy PM2.5 concentration & premature deaths by NUTS3 ==================
 rfasst_pop <- get(load("data/tmp/rfasst_pop.RData"))
 
-ap <- get(load("data/rfasst_output/check_layer.RData")) %>% 
-  dplyr::mutate(units = 'ug/m3',
-                scenario = 'layer',
-                level = 'WORLD-NUTS3') %>% 
-  dplyr::rename(region = 'id_code',
-                value = pm)
-# ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
-#   dplyr::filter(year == 2030)
+# # layer rfasst weights
+# ap <- get(load("data/rfasst_output/check_layer.RData")) %>% 
+#   dplyr::mutate(units = 'ug/m3',
+#                 scenario = 'layer',
+#                 level = 'WORLD-NUTS3') %>% 
+#   dplyr::rename(region = 'id_code',
+#                 value = pm)
+ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
+  dplyr::filter(year == yy)
 deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
-  dplyr::filter(year == 2030)
+  dplyr::filter(year == yy)
 if (normalized) {
   deaths <- deaths %>% 
     dplyr::group_by(region, year, sex, scenario) %>% 
     dplyr::summarise(value = sum(value)) %>% 
     dplyr::ungroup() %>% 
     dplyr::left_join(data.table::as.data.table(rfasst_pop) %>% 
-                       dplyr::filter(year == 2030) %>%
+                       dplyr::filter(year == yy) %>%
                        dplyr::group_by(region = geo, sex) %>% 
                        dplyr::summarise(pop = sum(pop) * 1e6) %>% # popM was in million
                        dplyr::ungroup(),
@@ -1409,7 +1414,7 @@ pl <- ggplot(data,
   labs(x = "PM2.5 concentration [ug/m3]", y = "", fill = "Decile") +
   theme_minimal()
 ggsave(
-  file = paste0("figures/fig_ap_var.pdf"), height = 20, width = 20, units = "cm",
+  file = paste0("figures/fig_ap_var_",yy,"_",split_num_tag,".pdf"), height = 20, width = 20, units = "cm",
   plot = pl
 )
 
@@ -1454,6 +1459,6 @@ pl <- ggplot(data,
   labs(x = "Premture deaths [M Normalized]", y = "", fill = "Decile") +
   theme_minimal()
 ggsave(
-  file = paste0("figures/fig_deaths_var",normalized_tag,".pdf"), height = 20, width = 20, units = "cm",
+  file = paste0("figures/fig_deaths_var",yy,"_",split_num_tag,"_",normalized_tag,".pdf"), height = 20, width = 20, units = "cm",
   plot = pl
 )

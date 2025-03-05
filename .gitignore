@@ -7,3 +7,6 @@ data/.Rhistory
 /slides
 .RData
 .Rhistory
+/paper
+*.ipynb
+*.npy

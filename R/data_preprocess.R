@@ -2,6 +2,7 @@ require(eurostat)
 require(eurostat)
 require(sf)
 library(tmap)
+library(magrittr)
 
 source("R/utils.R")
 source("R/zzz.R")
@@ -15,9 +16,56 @@ source("R/zzz.R")
 nuts3_plot_data <- get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>%
   dplyr::select(-FID)
 sf::st_write(nuts3_plot_data, "data/Replication data/Global_Inputs/nuts3_plot_data.shp",
-  delete_layer = TRUE,
-  layer_options = "ENCODING=UTF-8"
+             delete_layer = TRUE,
+             layer_options = "ENCODING=UTF-8"
 )
+
+
+#### rfasst data ===============================================================
+ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
+  dplyr::filter(year == yy)
+ap_nuts3 <- ap %>%
+  dplyr::filter(
+    nchar(region) > 3
+  ) %>%
+  dplyr::rename(
+    geo = region,
+    ap = value
+  ) %>%
+  dplyr::left_join(nuts3_plot_data,
+                   by = "geo"
+  )
+ap_nuts3_sf <- sf::st_sf(ap_nuts3, geometry = ap_nuts3$geometry)
+
+deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
+  dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
+  dplyr::filter(year == yy)
+if (normalized) {
+  deaths <- deaths %>% 
+    dplyr::group_by(region, year, sex, scenario) %>% 
+    dplyr::summarise(value = sum(value)) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::left_join(data.table::as.data.table(rfasst_pop) %>% 
+                       dplyr::filter(year == yy) %>%
+                       dplyr::group_by(region = geo, sex) %>% 
+                       dplyr::summarise(pop = sum(pop) * 1e6) %>% # popM was in million
+                       dplyr::ungroup(),
+                     by = c('region','sex')) %>% 
+    dplyr::mutate(value = value / pop * 1e6) %>% # deaths per 1000 habitants
+    dplyr::select(-pop)
+}
+deaths_nuts3 <- deaths %>%
+  dplyr::filter(
+    nchar(region) > 3
+  ) %>%
+  dplyr::rename(
+    geo = region,
+    deaths = value
+  ) %>%
+  dplyr::left_join(nuts3_plot_data,
+                   by = "geo"
+  )
+deaths_nuts3_sf <- sf::st_sf(deaths_nuts3, geometry = deaths_nuts3$geometry)
 
 
 #### eurostat HDD-CDD nuts3 data ===============================================
@@ -144,10 +192,11 @@ plot_gdp <- tm_shape(nuts3_plot_data,
   tm_fill("lightgrey") +
   tm_shape(gdp_sf %>%
              dplyr::select(gdp, geometry) %>%
-             dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+             dplyr::filter(rowSums(is.na(.)) == 0,
+                           gdp <= 80000) %>% 
              dplyr::filter(!st_is_empty(geometry))) +
   tm_polygons("gdp",
-              title = "GDP\n[2020 PPP EU27 €]",
+              title = "GDPpc\n[2020 PPP EU27 €]",
               palette = "Oranges",
               style = "cont"
   ) +
@@ -278,7 +327,8 @@ plot_elderly <- tm_shape(nuts3_plot_data,
   tm_polygons("per_elderly",
     title = "Elderly people [%]",
     palette = "Oranges",
-    style = "cont"
+    style = "cont",
+    size = 0.05
   ) +
   tm_layout(legend.title.size = 0.8) +
   tm_layout(legend.text.size = 0.6)
@@ -393,3 +443,37 @@ harm_socioeconomic_nuts_sf <- data.table::as.data.table(urbn_type) %>%
 harm_socioeconomic_nuts_sf <- sf::st_sf(harm_socioeconomic_nuts_sf, geometry = harm_socioeconomic_nuts_sf$geometry)
 
 sf::st_write(harm_socioeconomic_nuts_sf, "data/tmp/harm_socioeconomic_nuts_sf.shp", append = FALSE)
+
+
+
+## AP vs socioeconomic DATA ====================================================
+# merge AP & socioeconomic data
+ap_socioecon_sf <- sf::st_intersection(
+  harm_socioeconomic_nuts_sf %>%
+    dplyr::filter(sex == 'Both') %>% 
+    dplyr::select(geo, urbn_type, CDD, per_elderly, income = Disp_Inc_P_nuts3,
+                  gini = Gini_nuts3, gdp, geometry) %>%
+    unique(),
+  ap_nuts3_sf %>%
+    dplyr::select(ap, ctry = CNTR_CODE, geometry) %>% 
+    unique()
+)
+save(ap_socioecon_sf, file = 'ap_socioecon_sf.RData')
+
+## DEATHS vs socioeconomic DATA ====================================================
+# merge DEATHS & socioeconomic data
+a = harm_socioeconomic_nuts_sf %>%
+  dplyr::filter(sex == 'Both') %>% 
+  dplyr::select(geo, urbn_type, CDD, per_elderly, income = Disp_Inc_P_nuts3,
+                gini = Gini_nuts3, gdp, geometry) %>%
+  unique()
+
+b = deaths_nuts3_sf %>%
+  dplyr::filter(sex == 'Both') %>%
+  dplyr::select(deaths, ctry = CNTR_CODE, geometry) %>% 
+  unique()
+
+deaths_socioecon_sf <- sf::st_intersection(
+  a,b
+)
+save(deaths_socioecon_sf, file = 'deaths_socioecon_sf.RData')

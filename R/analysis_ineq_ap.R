@@ -7,8 +7,8 @@ source("R/utils.R")
 source("R/zzz.R")
 
 normalized <- T
-split_num <- 10 #10 deciles, 5 quintiles
-map <- F #T if plotted and saved, F otherwise
+split_num <- 5 #10 deciles, 5 quintiles
+map <- T #T if plotted and saved, F otherwise
 yy <- 2030
 # ==============================================================================
 #                                  LOAD DATA                                   #
@@ -17,22 +17,40 @@ normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
 split_num_tag <- dplyr::if_else(split_num == 5, 'quintile', 
                                 dplyr::if_else(split_num == 10, 'decile',
                                                paste0('split_num_',split_num)))
+## rfasst + socioeconomid data =================================================
+ap_socioecon_sf <- get(load('ap_socioecon_sf.RData'))
+deaths_socioecon_sf <- get(load('deaths_socioecon_sf.RData'))
 
-## load dummy PM2.5 concentration & premature deaths by NUTS3 ==================
-rfasst_pop <- get(load("data/tmp/rfasst_pop.RData"))
+rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
+  dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
+  dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
 
-# # layer rfasst weights
-# ap <- get(load("data/rfasst_output/check_layer.RData")) %>% 
-#   dplyr::mutate(units = 'ug/m3',
-#                 scenario = 'layer',
-#                 level = 'WORLD-NUTS3') %>% 
-#   dplyr::rename(region = 'id_code',
-#                 value = pm)
+rfasst_ctry_pop <- rfasst::pop.all.ctry_ctry.str.SSP2 %>% 
+  dplyr::select(geo = region, year, age, sex, unit, pop = value)  
+
 ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
   dplyr::filter(year == yy)
+
 deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
   dplyr::filter(year == yy)
+deaths_ctry <- deaths %>%
+  dplyr::filter(
+    nchar(region) > 3
+  ) %>%
+  dplyr::rename(
+    NUTS3 = region,
+    deaths = value
+  ) %>%
+  dplyr::left_join(rfasst::ctry_nuts3_codes %>% 
+                     dplyr::filter(ISO2 != 'TR') %>% 
+                     dplyr::distinct(),
+                   by = "NUTS3"
+  ) %>% 
+  dplyr::group_by(year, sex, scenario, region = ISO3) %>% 
+  dplyr::summarise(value = sum(deaths, na.rm = T)) %>% 
+  dplyr::ungroup()
+
 if (normalized) {
   deaths <- deaths %>% 
     dplyr::group_by(region, year, sex, scenario) %>% 
@@ -46,31 +64,25 @@ if (normalized) {
                      by = c('region','sex')) %>% 
     dplyr::mutate(value = value / pop * 1e6) %>% # deaths per 1000 habitants
     dplyr::select(-pop)
-  # deathsharm <- deaths %>% 
-  #   dplyr::group_by(region, year, sex, scenario) %>% 
-  #   dplyr::summarise(value = sum(value)) %>% 
-  #   dplyr::ungroup() %>% 
-  #   dplyr::left_join(data.table::as.data.table(harm_socioeconomic_nuts_sf) %>% 
-  #                      # dplyr::filter(year == 2020) %>% 
-  #                      dplyr::group_by(region = geo, sex) %>% 
-  #                      dplyr::summarise(pop = sum(popM) * 1e6) %>% # popM was in million
-  #                      dplyr::ungroup(),
-  #                    by = c('region','sex')) %>% 
-  #   dplyr::mutate(value2 = value / pop * 1e3) # deaths per 1000 habitants
-}
 
-## load socioeconomic data =====================================================
-new_colnames <- c(
-  "geo" = "geo", "urbn_type" = "urbn_ty", "CDD" = "CDD", "HDD" = "HDD", "gdp" = "gdp",
-  "sex" = "sex", "per_elderly" = "pr_ldrl", "age" = "age", "popM" = "popM" ,
-  "year" = "Year", "iso" = "ISO", "Pop_nuts3" = "Ppltn_3", "Disp_Inc_P_nuts3" = "D_I_P_3",
-  "Gini_nuts3" = "Gn_nts3", "geometry" = "geometry"
-)
-harm_socioeconomic_nuts_sf <- sf::st_read("data/tmp/harm_socioeconomic_nuts_sf.shp") %>%
-  dplyr::rename(new_colnames)
+  deaths_ctry <- deaths_ctry %>% 
+    dplyr::group_by(region, year, sex, scenario) %>% 
+    dplyr::summarise(value = sum(value)) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::left_join(data.table::as.data.table(rfasst_ctry_pop) %>% 
+                       dplyr::filter(year == yy) %>%
+                       dplyr::group_by(region = geo, sex) %>% 
+                       dplyr::summarise(pop = sum(pop) * 1e6) %>% # popM was in million
+                       dplyr::ungroup(),
+                     by = c('region','sex')) %>% 
+    dplyr::mutate(value = value / pop * 1e6) %>% # deaths per 1000 habitants
+    dplyr::select(-pop)
+}
 
 ## load spacial data ===========================================================
 nuts3_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>%
+  dplyr::select(-FID)
+ctry_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 0, year = 2021) %>%
   dplyr::select(-FID)
 
 # ==============================================================================
@@ -103,12 +115,13 @@ if (map) {
     tm_shape(ap_nuts3_sf) +
     tm_polygons("ap",
       title = "PM2.5\n[ug/m3]",
-      palette = "Oranges",
+      palette = "Blues",
       style = "cont",
       lwd = 0.5
     ) +
-    tm_layout(legend.title.size = 0.8) +
-    tm_layout(legend.text.size = 0.6)
+    tm_layout(legend.title.size = 0.8,
+              legend.text.size = 0.6,
+              frame = FALSE)
   
   tmap::tmap_save(plot_ap,
     filename = paste0("figures/plot_ap.pdf"),
@@ -146,12 +159,18 @@ if (map) {
         sex == "Both"
       )) +
     tm_polygons("deaths",
-      title = "Premature deaths\n[Normalized M]",
+      title = "Premature deaths\n[Normalized in Millions]",
       palette = "Oranges",
-      style = "cont",       lwd = 0.5
+      style = "cont",
+      lwd = 0.5
     ) +
-    tm_layout(legend.title.size = 0.8) +
-    tm_layout(legend.text.size = 0.6)
+    tm_layout(legend.title.size = 0.8,
+              legend.text.size = 0.6,
+              legend.position = c("right", "top"),  # Fix legend in the top-right corner
+              legend.bg.color = "white",  # Optional: Adds a white background
+              legend.bg.alpha = 0.8,      # Optional: Makes background slightly transparent
+              legend.width = 1.5,
+              frame = FALSE)
   
   tmap::tmap_save(plot_deaths,
     filename = paste0("figures/plot_deaths", normalized_tag, ".pdf"),
@@ -212,14 +231,10 @@ if (map) {
 
 ## AP vs urbn_type  ============================================================
 # check normality
-ap_urbntype_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, urbn_type, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  ap_nuts3_sf %>%
-    dplyr::select(-URBN_TYPE, -geo)
-) %>%
-  dplyr::select(geo, urbn_type, ap, geometry)
+ap_urbntype_sf <- ap_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, urbn_type, ap, geometry) %>% 
+  unique()
 
 # # Histogram
 # ggplot(ap_urbntype_sf, aes(x = ap)) +
@@ -303,14 +318,10 @@ if (map) {
 ## AP vs CDD ===========================================================
 
 # check normality
-ap_cdd_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, CDD, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  ap_nuts3_sf %>%
-    dplyr::select(ap, geometry)
-) %>%
-  dplyr::select(geo, cdd = CDD, ap, geometry)
+ap_cdd_sf <- ap_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, cdd = CDD, ap, geometry) %>% 
+  unique() 
 
 ap_cdd <- data.table::as.data.table(ap_cdd_sf) %>%
   dplyr::select(-geometry) %>%
@@ -388,14 +399,11 @@ if (map) {
 ## AP vs ELDERLY ===============================================================
 
 # check normality
-ap_elderly_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, per_elderly, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  ap_nuts3_sf %>%
-    dplyr::select(ap, geometry)
-) %>%
-  dplyr::select(geo, per_elderly, ap, geometry)
+ap_elderly_sf <- ap_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, per_elderly, ap, geometry) %>% 
+  unique() 
+
 
 ap_elderly <- data.table::as.data.table(ap_elderly_sf) %>%
   dplyr::select(-geometry) %>%
@@ -483,14 +491,10 @@ if (map) {
 ## AP vs INCOME ============================================================
 
 # check normality
-ap_income_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, income = Disp_Inc_P_nuts3, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  ap_nuts3_sf %>%
-    dplyr::select(ap, geometry)
-) %>%
-  dplyr::select(geo, income, ap, geometry)
+ap_income_sf <- ap_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, income, ap, geometry) %>% 
+  unique() 
 
 ap_income <- data.table::as.data.table(ap_income_sf) %>%
   dplyr::select(-geometry) %>%
@@ -570,12 +574,15 @@ if (map) {
 ## AP vs GDP ============================================================
 
 # check normality
-ap_gdp_sf <- sf::st_join(
+ap_gdp_sf <- sf::st_intersection(
   harm_socioeconomic_nuts_sf %>%
+    dplyr::filter(sex == 'Both') %>% 
     dplyr::select(geo, gdp, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
+    dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+    unique(),
   ap_nuts3_sf %>%
-    dplyr::select(ap, geometry)
+    dplyr::select(ap, geometry) %>% 
+    unique()
 ) %>%
   dplyr::select(geo, gdp, ap, geometry)
 
@@ -625,12 +632,12 @@ if (map) {
     ggpubr::theme_pubr() +
     scale_fill_manual(
       values = quintiles.color,
-      name = "gdp Quintiles [2015 PPP]",
+      name = "GDP Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
     scale_color_manual(
       values = quintiles.color,
-      name = "gdp Quintiles [2015 PPP]",
+      name = "GDP Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
     labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
@@ -657,14 +664,11 @@ if (map) {
 ## AP vs GINI ============================================================
 
 # check normality
-ap_gini_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, gini = Gini_nuts3, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  ap_nuts3_sf %>%
-    dplyr::select(ap, geometry)
-) %>%
-  dplyr::select(geo, gini, ap, geometry)
+ap_gini_sf <- ap_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, gini, ap, geometry) %>% 
+  unique() 
+
 
 ap_gini <- data.table::as.data.table(ap_gini_sf) %>%
   dplyr::select(-geometry) %>%
@@ -741,17 +745,15 @@ if (map) {
   )
 }
   
+
+
 ## DEATHS vs urbn_type ===========================================================
 
 # check normality
-deaths_urbntype_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, urbn_type, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  deaths_nuts3_sf %>%
-    dplyr::select(deaths, geometry)
-) %>%
-  dplyr::select(geo, urbn_type, deaths, geometry)
+deaths_urbntype_sf <- deaths_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, urbn_type, deaths, geometry) %>% 
+  unique() 
 
 deaths_urbntype <- data.table::as.data.table(deaths_urbntype_sf) %>%
   dplyr::select(-geometry) %>%
@@ -759,31 +761,6 @@ deaths_urbntype <- data.table::as.data.table(deaths_urbntype_sf) %>%
   # remove outliers(>95%)
   dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
 
-# # Histogram
-# ggplot(deaths_urbntype, aes(x = deaths)) +
-#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-#   facet_wrap(~urbn_type) %>%
-#   theme(legend.position = "none")
-# 
-# # Q-Q plot
-# ggplot(deaths_urbntype, aes(sample = deaths)) +
-#   stat_qq() +
-#   stat_qq_line() +
-#   facet_wrap(~urbn_type) %>%
-#   theme(legend.position = "none")
-# 
-# # Anderson-Darling Test
-# test <- nortest::ad.test(deaths_urbntype$deaths)
-# # A = 3364.5, p-value < 2.2e-16 --> NOT normal distribution
-# 
-# # Kruskal-Wallis Test (for >2 categories) - non parametric test
-# test <- kruskal.test(deaths ~ urbn_type, data = deaths_urbntype_sf)
-# # Kruskal-Wallis chi-squared = 5273.1, df = 2, p-value < 2.2e-16
-# rstatix::kruskal_effsize(data = as.data.frame(deaths_urbntype_sf), deaths ~ urbn_type)
-# # .y.       n effsize method  magnitude
-# # * <chr> <int>   <dbl> <chr>   <ord>
-# #   deaths 127621  0.0413 eta2[H] small
-# # Result: the effect of the urbn_type is SIGNIFICANT and SMALL
 
 deaths_urbntype_medi <- deaths_urbntype[, .(medi = quantile(deaths, 0.5, na.rm = T)),
   by = c("urbn_type")
@@ -840,47 +817,16 @@ if (map) {
 ## DEATHS vs CDD ===========================================================
 
 # check normality
-deaths_cdd_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, CDD, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  deaths_nuts3_sf %>%
-    dplyr::select(deaths, geometry)
-) %>%
-  dplyr::select(geo, cdd = CDD, deaths, geometry)
+deaths_cdd_sf <- deaths_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, cdd = CDD, deaths, geometry) %>% 
+  unique() 
 
 deaths_cdd <- data.table::as.data.table(deaths_cdd_sf) %>%
   dplyr::select(-geometry) %>%
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
   # remove outliers(>95%)
-  dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
-
-# # Histogram
-# ggplot(deaths_cdd, aes(x = deaths)) +
-#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-#   theme(legend.position = "none")
-# 
-# # Q-Q plot
-# ggplot(deaths_cdd, aes(sample = deaths)) +
-#   stat_qq() +
-#   stat_qq_line() +
-#   theme(legend.position = "none")
-# 
-# # Anderson-Darling Test
-# test <- nortest::ad.test(deaths_cdd$deaths)
-# # A = 15155, p-value < 2.2e-16 (all data) --> NOT normal distribution
-# 
-# # Kruskal-Wallis Test (for >2 categories) - non parametric test
-# test <- kruskal.test(deaths ~ cdd, data = deaths_cdd_sf)
-# # Kruskal-Wallis chi-squared = 52418, df = 1016, p-value < 2.2e-16 (all data)
-# rstatix::kruskal_effsize(data = as.data.frame(deaths_cdd_sf), deaths ~ cdd)
-# # .y.       n effsize method  magnitude
-# # * <chr> <int>   <dbl> <chr>   <ord>
-# #   deaths 144454   0.358 eta2[H] large
-# # Result: the effect of the cdd is SIGNIFICANT and LARGE
-
-
-deaths_cdd <- deaths_cdd %>%
+  dplyr::filter(deaths <= quantile(deaths, probs = 0.95)) %>%
   dplyr::mutate(mean_cdd_decile = as.factor(dplyr::ntile(cdd, split_num)))
 
 deaths_cdd_medi <- deaths_cdd[, .(medi = quantile(deaths, 0.5, na.rm = T)),
@@ -938,50 +884,16 @@ if (map) {
 ## DEATHS vs ELDERLY ===========================================================
 
 # check normality
-deaths_elderly_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, per_elderly, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  deaths_nuts3_sf %>%
-    dplyr::select(deaths, geometry)
-) %>%
-  dplyr::select(geo, per_elderly, deaths, geometry)
+deaths_elderly_sf <- deaths_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, per_elderly, deaths, geometry) %>% 
+  unique() 
 
 deaths_elderly <- data.table::as.data.table(deaths_elderly_sf) %>%
   dplyr::select(-geometry) %>%
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
   # remove outliers(>95%)
-  dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
-
-# # Histogram
-# ggplot(deaths_elderly, aes(x = deaths)) +
-#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-#   facet_wrap(~per_elderly) %>%
-#   theme(legend.position = "none")
-# 
-# # Q-Q plot
-# ggplot(deaths_elderly, aes(sample = deaths)) +
-#   stat_qq() +
-#   stat_qq_line() +
-#   facet_wrap(~per_elderly) %>%
-#   theme(legend.position = "none")
-# 
-# # Anderson-Darling Test
-# test <- nortest::ad.test(deaths_elderly$deaths)
-# # A = 3366, p-value < 2.2e-16 --> NOT normal distribution
-# 
-# # Kruskal-Wallis Test (for >2 categories) - non parametric test
-# test <- kruskal.test(deaths ~ per_elderly, data = deaths_elderly_sf)
-# # Kruskal-Wallis chi-squared = 61598, df = 1169, p-value < 2.2e-16
-# rstatix::kruskal_effsize(data = as.data.frame(deaths_elderly_sf), deaths ~ per_elderly)
-# # .y.       n effsize method  magnitude
-# # * <chr> <int>   <dbl> <chr>   <ord>
-# #   deaths 127621   0.478 eta2[H] large
-# # Result: the effect of the per_elderly is SIGNIFICANT and LARGE
-
-
-
-deaths_elderly <- deaths_elderly %>%
+  dplyr::filter(deaths <= quantile(deaths, probs = 0.95)) %>%
   dplyr::mutate(per_elderly_decile = as.factor(dplyr::ntile(per_elderly, split_num)))
 
 deaths_elderly_medi <- deaths_elderly[, .(medi = quantile(deaths, 0.5, na.rm = T)),
@@ -1039,49 +951,16 @@ if (map) {
 ## DEATHS vs INCOME ============================================================
 
 # check normality
-deaths_income_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, income = Disp_Inc_P_nuts3, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  deaths_nuts3_sf %>%
-    dplyr::select(deaths, geometry)
-) %>%
-  dplyr::select(geo, income, deaths, geometry)
+deaths_income_sf <- deaths_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, income, deaths, geometry) %>% 
+  unique() 
 
 deaths_income <- data.table::as.data.table(deaths_income_sf) %>%
   dplyr::select(-geometry) %>%
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
   # remove outliers(>95%)
-  dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
-
-# # Histogram
-# ggplot(deaths_income, aes(x = deaths)) +
-#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-#   facet_wrap(~income) %>%
-#   theme(legend.position = "none")
-# 
-# # Q-Q plot
-# ggplot(deaths_income, aes(sample = deaths)) +
-#   stat_qq() +
-#   stat_qq_line() +
-#   facet_wrap(~income) %>%
-#   theme(legend.position = "none")
-# 
-# # Anderson-Darling Test
-# test <- nortest::ad.test(deaths_income$deaths)
-# # A = 3883.6, p-value < 2.2e-16 --> NOT normal distribution
-# 
-# # Kruskal-Wallis Test (for >2 categories) - non parametric test
-# test <- kruskal.test(deaths ~ income, data = deaths_income_sf)
-# # Kruskal-Wallis chi-squared = 47227, df = 1124, p-value < 2.2e-16
-# rstatix::kruskal_effsize(data = as.data.frame(deaths_income_sf), deaths ~ income)
-# # .y.       n effsize method  magnitude
-# # * <chr> <int>   <dbl> <chr>   <ord>
-# #   deaths 127621   0.364 eta2[H] large
-# # Result: the effect of the income is SIGNIFICANT and LARGE
-
-
-deaths_income <- deaths_income %>%
+  dplyr::filter(deaths <= quantile(deaths, probs = 0.95)) %>%
   dplyr::mutate(income_decile = as.factor(dplyr::ntile(income, split_num)))
 
 deaths_income_medi <- deaths_income[, .(medi = quantile(deaths, 0.5, na.rm = T)),
@@ -1139,35 +1018,16 @@ if (map) {
 ## DEATHS vs GDP ============================================================
 
 # check normality
-deaths_gdp_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, gdp, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  deaths_nuts3_sf %>%
-    dplyr::select(deaths, geometry)
-) %>%
-  dplyr::select(geo, gdp, deaths, geometry)
+deaths_gdp_sf <- deaths_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, gdp, deaths, geometry) %>% 
+  unique() 
 
 deaths_gdp <- data.table::as.data.table(deaths_gdp_sf) %>%
   dplyr::select(-geometry) %>%
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
   # remove outliers(>95%)
-  dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
-
-# # Histogram
-# ggplot(deaths_gdp, aes(x = deaths)) +
-#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-#   facet_wrap(~gdp) %>%
-#   theme(legend.position = "none")
-# 
-# # Q-Q plot
-# ggplot(deaths_gdp, aes(sample = deaths)) +
-#   stat_qq() +
-#   stat_qq_line() +
-#   facet_wrap(~gdp) %>%
-#   theme(legend.position = "none")
-
-deaths_gdp <- deaths_gdp %>%
+  dplyr::filter(deaths <= quantile(deaths, probs = 0.95)) %>%
   dplyr::mutate(gdp_decile = as.factor(dplyr::ntile(gdp, split_num)))
 
 deaths_gdp_medi <- deaths_gdp[, .(medi = quantile(deaths, 0.5, na.rm = T)),
@@ -1193,12 +1053,12 @@ if (map) {
     ggpubr::theme_pubr() +
     scale_fill_manual(
       values = quintiles.color,
-      name = "gdp Quintiles [2015 PPP]",
+      name = "GDP Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
     scale_color_manual(
       values = quintiles.color,
-      name = "gdp Quintiles [2015 PPP]",
+      name = "GDP Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
     labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
@@ -1225,49 +1085,16 @@ if (map) {
 ## DEATHS vs GINI ============================================================
 
 # check normality
-deaths_gini_sf <- sf::st_join(
-  harm_socioeconomic_nuts_sf %>%
-    dplyr::select(geo, gini = Gini_nuts3, geometry) %>%
-    dplyr::filter(rowSums(is.na(.)) == 0),
-  deaths_nuts3_sf %>%
-    dplyr::select(deaths, geometry)
-) %>%
-  dplyr::select(geo, gini, deaths, geometry)
+deaths_gini_sf <- deaths_socioecon_sf %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::select(geo, gini, deaths, geometry) %>% 
+  unique() 
 
 deaths_gini <- data.table::as.data.table(deaths_gini_sf) %>%
   dplyr::select(-geometry) %>%
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
   # remove outliers(>95%)
-  dplyr::filter(deaths <= quantile(deaths, probs = 0.95))
-
-# # Histogram
-# ggplot(deaths_gini, aes(x = deaths)) +
-#   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-#   facet_wrap(~gini) %>%
-#   theme(legend.position = "none")
-# 
-# # Q-Q plot
-# ggplot(deaths_gini, aes(sample = deaths)) +
-#   stat_qq() +
-#   stat_qq_line() +
-#   facet_wrap(~gini) %>%
-#   theme(legend.position = "none")
-# 
-# # Anderson-Darling Test
-# test <- nortest::ad.test(deaths_gini$deaths)
-# # A = 3883.6, p-value < 2.2e-16 --> NOT normal distribution
-# 
-# # Kruskal-Wallis Test (for >2 categories) - non parametric test
-# test <- kruskal.test(deaths ~ gini, data = deaths_gini_sf)
-# # Kruskal-Wallis chi-squared = 48183, df = 958, p-value < 2.2e-16
-# rstatix::kruskal_effsize(data = as.data.frame(deaths_gini_sf), deaths ~ gini)
-# # .y.       n effsize method  magnitude
-# # * <chr> <int>   <dbl> <chr>   <ord>
-# #   deaths 127621   0.373 eta2[H] large
-# # Result: the effect of the gini is SIGNIFICANT and LARGE
-
-
-deaths_gini <- deaths_gini %>%
+  dplyr::filter(deaths <= quantile(deaths, probs = 0.95)) %>%
   dplyr::mutate(gini_decile = as.factor(dplyr::ntile(gini, split_num)))
 
 deaths_gini_medi <- deaths_gini[, .(medi = quantile(deaths, 0.5, na.rm = T)),

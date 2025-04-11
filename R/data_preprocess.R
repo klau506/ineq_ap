@@ -6,7 +6,8 @@ library(magrittr)
 
 source("R/utils.R")
 source("R/zzz.R")
-
+yy = 2030
+normalized = T
 # ==============================================================================
 #                                  LOAD DATA                                   #
 # ==============================================================================
@@ -20,8 +21,14 @@ sf::st_write(nuts3_plot_data, "data/Replication data/Global_Inputs/nuts3_plot_da
              layer_options = "ENCODING=UTF-8"
 )
 
+#### rfasst population data ====================================================
+# Source: rfasst pkg, dev_k branch population in million
+rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
+  dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
+  dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
+save(rfasst_pop, file = "data/tmp/rfasst_pop.RData")
 
-#### rfasst data ===============================================================
+#### rfasst output data ========================================================
 ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
   dplyr::filter(year == yy)
 ap_nuts3 <- ap %>%
@@ -37,7 +44,7 @@ ap_nuts3 <- ap %>%
   )
 ap_nuts3_sf <- sf::st_sf(ap_nuts3, geometry = ap_nuts3$geometry)
 
-deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
+deaths <- get(load(paste0("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
   dplyr::filter(year == yy)
 if (normalized) {
@@ -106,12 +113,6 @@ sf::st_write(gdp_sf, "data/tmp/gdp_sf.shp", append = FALSE)
 
 
 
-#### rfasst population data ====================================================
-# Source: rfasst pkg, dev_k branch population in million
-rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
-  dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
-  dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
-save(rfasst_pop, file = "data/tmp/rfasst_pop.RData")
 
 
 #### eurostat urbn-type data ===================================================
@@ -442,7 +443,7 @@ harm_socioeconomic_nuts_sf <- data.table::as.data.table(urbn_type) %>%
   )
 harm_socioeconomic_nuts_sf <- sf::st_sf(harm_socioeconomic_nuts_sf, geometry = harm_socioeconomic_nuts_sf$geometry)
 
-sf::st_write(harm_socioeconomic_nuts_sf, "data/tmp/harm_socioeconomic_nuts_sf.shp", append = FALSE)
+sf::st_write(harm_socioeconomic_nuts_sf, "data/tmp/harm_socioeconomic_nuts_sf_newdeaths.shp", append = FALSE)
 
 
 
@@ -476,4 +477,4 @@ b = deaths_nuts3_sf %>%
 deaths_socioecon_sf <- sf::st_intersection(
   a,b
 )
-save(deaths_socioecon_sf, file = 'deaths_socioecon_sf.RData')
+save(deaths_socioecon_sf, file = 'deaths_socioecon_sf_newdeaths.RData')

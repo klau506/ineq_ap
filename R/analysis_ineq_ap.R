@@ -19,7 +19,7 @@ split_num_tag <- dplyr::if_else(split_num == 5, 'quintile',
                                                paste0('split_num_',split_num)))
 ## rfasst + socioeconomid data =================================================
 ap_socioecon_sf <- get(load('ap_socioecon_sf.RData'))
-deaths_socioecon_sf <- get(load('deaths_socioecon_sf.RData'))
+deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths.RData'))
 
 rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
@@ -31,9 +31,10 @@ rfasst_ctry_pop <- rfasst::pop.all.ctry_ctry.str.SSP2 %>%
 ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
   dplyr::filter(year == yy)
 
-deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
+deaths <- get(load(paste0("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
-  dplyr::filter(year == yy)
+  dplyr::filter(year == yy,
+                sex == 'Both')
 deaths_ctry <- deaths %>%
   dplyr::filter(
     nchar(region) > 3
@@ -50,6 +51,10 @@ deaths_ctry <- deaths %>%
   dplyr::group_by(year, sex, scenario, region = ISO3) %>% 
   dplyr::summarise(value = sum(deaths, na.rm = T)) %>% 
   dplyr::ungroup()
+
+count_deaths <- sum(deaths_ctry$value)
+print(count_deaths)
+
 
 if (normalized) {
   deaths <- deaths %>% 
@@ -159,7 +164,7 @@ if (map) {
         sex == "Both"
       )) +
     tm_polygons("deaths",
-      title = "Premature deaths\n[Normalized in Millions]",
+      title = "Premature deaths\n[Deaths per 1M inhabitants]",
       palette = "Oranges",
       style = "cont",
       lwd = 0.5
@@ -220,7 +225,7 @@ if (map) {
          aes(x = deaths, y = ap, color = CNTR_CODE, shape = urbn_type)) +
     geom_point(alpha = 0.5, size = 2) +
     theme_minimal() +
-    labs(x = "Premature deaths [normalized million]", y = "PM2.5 concentration [ug/m3]")
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "PM2.5 concentration [ug/m3]")
   
   ggsave(
     file = paste0("figures/plot_deaths_ap", normalized_tag, ".pdf"), height = 15, width = 15, units = "cm",
@@ -793,7 +798,7 @@ if (map) {
       name = "Urban type",
       labels = urbn_type.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "Probability density") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -860,7 +865,7 @@ if (map) {
       name = "CDD [NR]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "Probability density") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -927,7 +932,7 @@ if (map) {
       name = "Elderly population [%]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "Probability density") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -994,7 +999,7 @@ if (map) {
       name = "Income Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "Probability density") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -1061,7 +1066,7 @@ if (map) {
       name = "GDP Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "Probability density") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -1128,7 +1133,7 @@ if (map) {
       name = "Gini Quintiles [Index]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "Probability density") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -1283,7 +1288,7 @@ pl <- ggplot(data,
   geom_point() +
   # scale_color_manual(values = viridis::viridis(n = split_num, option = "cividis")) +
   scale_color_manual(values = RColorBrewer::brewer.pal(n = split_num, name = "RdYlBu")) +
-  labs(x = "Premture deaths [M Normalized]", y = "", fill = "Decile") +
+  labs(x = "Premture deaths [Deaths per 1M inhabitants]", y = "", fill = "Decile") +
   theme_minimal()
 ggsave(
   file = paste0("figures/fig_deaths_var",yy,"_",split_num_tag,"_",normalized_tag,".pdf"), height = 20, width = 20, units = "cm",

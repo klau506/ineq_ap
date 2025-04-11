@@ -15,23 +15,18 @@ library(dplyr)
 ml_clustering <- function(data, cluster_number, fig_name) {
   # Convert each country's values to ranks
   ranked_data <- data %>%
-    select(-country) %>%
+    dplyr::select(-country) %>%
     apply(1, rank) %>%
     t() %>%
     as.data.frame()
   
   rownames(ranked_data) <- data$country  # Assign row names
   
-  
-  
-  
   # Compute Spearman correlation matrix
   cor_matrix <- cor(t(ranked_data), method = "spearman")
   
   # Convert to distance matrix (1 - correlation)
   dist_matrix <- as.dist(1 - cor_matrix)
-  
-  
   
   # Perform hierarchical clustering
   hc <- hclust(dist_matrix, method = "ward.D2")

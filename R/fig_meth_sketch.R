@@ -162,7 +162,7 @@ if (map) {
                  sex == "Both"
                )) +
     tm_polygons("deaths",
-                title = "Premature deaths\n[Normalized M]",
+                title = "Premature deaths\n[Deaths per 1M inhabitants]",
                 palette = "Oranges",
                 style = "cont",       
                 lwd = 0.2

@@ -20,8 +20,17 @@ urbn_raster <- terra::rast("data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS
 pop_ge65 <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-Y_GE65_2021_V2.tiff")
 pop_t <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-T_2021_V2.tiff")
 
-extent_raster <- terra::ext(inc_pc_2015)
-# extent_raster <- ext(-31.276, 40.215, 27.633, 71.141)
+extent_raster <- ext(-26.276, 40.215, 32.633, 71.141)
+pm_raster2 <- terra::crop(pm_raster, extent_raster)
+inc_pc_20152 <- terra::crop(inc_pc_2015, extent_raster)
+
+europe_shp <- rnaturalearth::ne_countries(continent = "Europe", returnclass = "sf") %>% 
+  dplyr::filter(adm0_a3 != 'RUS')
+eu_mask <- vect(europe_shp)
+eu_mask <- terra::crop(eu_mask, extent_raster)
+eu_mask[!is.na(eu_mask)] <- 1
+eu_mask[is.na(eu_mask)] <- 0
+
 
 # target_crs <- "EPSG:4326"
 # urbn_raster_reproj <- project(urbn_raster, target_crs)
@@ -36,9 +45,9 @@ extent_raster <- terra::ext(inc_pc_2015)
 
 
 ## AP vs URBN TYPE ===============================================================
-urbn_raster2 <- terra::resample(urbn_raster, pm_raster)
-urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
-writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
+# urbn_raster2 <- terra::resample(urbn_raster, pm_raster)
+# urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
+# writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
 
 # Define classification function
 classify_function <- function(x) {
@@ -50,13 +59,8 @@ classify_function <- function(x) {
 
 # Apply classification
 urbn_raster_classified <- app(urbn_raster2, classify_function)
-
-# Name the new layer
 names(urbn_raster_classified) <- "classification_layer"
-
-# Combine with the original raster
 urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
-
 plot(urbn_raster_combined$classification_layer)
 
 # Plot only 1 urbn type
@@ -76,18 +80,18 @@ urbn_values <- values(urbn_raster_combined_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(urbn_values)
-df <- data.frame(pm_concentration = pm_values[valid_idx], urbn_type = urbn_values[valid_idx])
+df_ap_urbn <- data.frame(pm_concentration = pm_values[valid_idx], urbn_type = urbn_values[valid_idx])
 
-df_no0 <- df[df$pm_concentration > 0,]
-df_no0 <- df_no0[df_no0$urbn_type > 0,]
-df_no0 <- unique(df_no0)
+df_ap_urbn_no0 <- df_ap_urbn[df_ap_urbn$pm_concentration > 0,]
+df_ap_urbn_no0 <- df_ap_urbn_no0[df_ap_urbn_no0$urbn_type > 0,]
+df_ap_urbn_no0 <- unique(df_ap_urbn_no0)
 
-df_medi <- df_no0 %>%
+df_medi <- df_ap_urbn_no0 %>%
   dplyr::group_by(urbn_type) %>%
   dplyr::summarize(medi = mean(pm_concentration)) %>% 
   dplyr::ungroup()
 
-plot_urbntype_density <- ggplot(df_no0, aes(x = pm_concentration, 
+plot_urbntype_density <- ggplot(df_ap_urbn_no0, aes(x = pm_concentration, 
                    color = as.factor(urbn_type),
                    fill = as.factor(urbn_type))) +
   geom_density(alpha = 0.5) +
@@ -277,6 +281,7 @@ df_ap_eld <- data.frame(pm_concentration = pm_values[valid_idx], pop_elderly_per
 df_ap_eld_no0 <- df_ap_eld[df_ap_eld$pm_concentration > 0,]
 df_ap_eld_no0 <- df_ap_eld_no0[df_ap_eld_no0$pop_elderly_per > 0,]
 df_ap_eld_no0 <- unique(df_ap_eld_no0) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
   dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(pop_elderly_per, 5))) 
 
 binned_data <- df_ap_eld_no0 %>%
@@ -323,6 +328,26 @@ if (map) {
     dplyr::group_by(quintile_5) %>%
     dplyr::summarize(medi = mean(pm_concentration)) %>% 
     dplyr::ungroup()
+  
+  df_ap_eld_no0 %>%
+    dplyr::group_by(quintile_5) %>%
+    dplyr::summarise(
+      min_per_elderly = min(pop_elderly_per, na.rm = TRUE),
+      max_per_elderly = max(pop_elderly_per, na.rm = TRUE),
+      mean_per_elderly = mean(pop_elderly_per, na.rm = TRUE),
+      median_per_elderly = median(pop_elderly_per, na.rm = TRUE),
+      sd_per_elderly = sd(pop_elderly_per, na.rm = TRUE),
+      n = dplyr::n()
+    )
+  # # A tibble: 5 x 7
+  # quintile_5 min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly      n
+  # <fct>                <dbl>           <dbl>            <dbl>              <dbl>          <dbl>  <int>
+  # 1 1             0.0000000605           0.146           0.0934              0.105         0.0421 703964
+  # 2 2             0.146                  0.194           0.171               0.172         0.0136 703964
+  # 3 3             0.194                  0.238           0.215               0.215         0.0127 703964
+  # 4 4             0.238                  0.310           0.269               0.267         0.0203 703963
+  # 5 5             0.310                  1.00            0.456               0.398         0.157  703963
+  
   
   plot_eld_density <- 
     ggplot(df_ap_eld_no0, aes(x = pm_concentration, 

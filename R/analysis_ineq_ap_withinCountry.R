@@ -20,7 +20,7 @@ split_num_tag <- dplyr::if_else(split_num == 5, 'quintile',
 
 ## rfasst + socioeconomid data =================================================
 ap_socioecon_sf <- get(load('ap_socioecon_sf.RData'))
-deaths_socioecon_sf <- get(load('deaths_socioecon_sf.RData'))
+deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths.RData'))
 
 rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
@@ -29,15 +29,10 @@ rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>%
 ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
   dplyr::filter(year == yy)
 
-deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
+deaths <- get(load(paste0("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
-  dplyr::filter(year == yy)
-deaths_eu_number <- deaths %>% 
-  dplyr::filter(nchar(region) == 5,
-                sex == 'Both',
-                age == '>25') %>% 
-  dplyr::summarise(value = sum(value))
-print(deaths_eu_number)
+  dplyr::filter(year == yy,
+                sex == 'Both')
 
 if (normalized) {
   deaths <- deaths %>% 
@@ -101,7 +96,7 @@ if (map) {
     tm_fill("lightgrey") +
     tm_shape(ap_nuts3_sf) +
     tm_polygons("ap_rate",
-                title = "Regional Pollution Index",
+                title = "Regional Pollution\nIndex",
                 palette = "Oranges",
                 style = "cont",
                 lwd = 0.5
@@ -157,7 +152,7 @@ if (map) {
     tm_shape(deaths_nuts3_sf %>% 
                dplyr::filter(deaths_rate < 2)) +
     tm_polygons("deaths_rate",
-                title = "Regional Deaths Index",
+                title = "Regional Deaths\nIndex",
                 palette = "Oranges",
                 style = "cont",       lwd = 0.5
     ) +
@@ -585,7 +580,7 @@ if (map) {
       name = "Urban type",
       labels = urbn_type.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "Probability density") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "Probability density") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -669,7 +664,7 @@ if (map) {
       name = "Elderly population [%]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -752,7 +747,7 @@ if (map) {
       name = "Income Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -844,7 +839,7 @@ if (map) {
       name = "GDP Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -928,7 +923,7 @@ if (map) {
       name = "GDP Quintiles [2015 PPP]",
       labels = quintiles.labs
     ) +
-    labs(x = "Premature deaths [M Normalized]", y = "") +
+    labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -977,7 +972,7 @@ data_list <- list(
 
 # Merge all datasets by 'decile'
 data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("decile","ctry"))) %>%
-  left_join(ap_urbntype_medi %>%
+  dplyr::left_join(ap_urbntype_medi %>%
               dplyr::rename_with(~ "urbn_medi", contains("medi")) %>% 
               dplyr::mutate(urbn_type = as.factor(urbn_type)),
             by = 'ctry'
@@ -1047,7 +1042,7 @@ data_list <- list(
 
 # Merge all datasets by 'decile'
 data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("decile","ctry"))) %>%
-  left_join(deaths_urbntype_medi %>%
+  dplyr::left_join(deaths_urbntype_medi %>%
               dplyr::rename_with(~ "urbn_medi", contains("medi")) %>% 
               dplyr::mutate(urbn_type = as.factor(urbn_type)),
             by = 'ctry'
@@ -1086,7 +1081,7 @@ pl <- ggplot() +
     name = "Urban type",
     labels = urbn_type.labs
   ) +
-  labs(x = "Premture deaths [M Normalized]", y = "") +
+  labs(x = "Premture deaths [Deaths per 1M inhabitants]", y = "") +
   theme_minimal()
 pl
 ggsave(
@@ -1105,7 +1100,7 @@ source('R/prova_ml.R')
 data <- ap_income_medi %>%
   dplyr::rename_with(~ "decile", contains("decile")) %>%
   dplyr::rename_with(~ "income_medi", contains("medi")) %>% 
-  tibble::as.tibble() %>% 
+  tibble::as_tibble() %>% 
   dplyr::mutate(decile = paste0('Q',decile)) %>%
   dplyr::arrange(decile, ctry) %>% 
   tidyr::pivot_wider(names_from = 'decile', values_from = 'income_medi') %>% 
@@ -1115,12 +1110,10 @@ data <- ap_income_medi %>%
 ml_do_all(data, 2, 'withinCtry/ml_income',
           fig_legend = "Income\nper capita\nquintile",
           fig_ox_label = "PM2.5 concentration [ug/m3]",
-          fix = T)  
+          fix = T)
 
 
 ## AP vs ELDERLY --------------------------------------------------------------
-ml_do_all <- function(data, cluster_number, fig_name)
-
 data <- ap_elderly_medi %>%
   dplyr::rename_with(~ "decile", contains("decile")) %>%
   dplyr::rename_with(~ "per_elderly_decile", contains("medi")) %>% 
@@ -1137,7 +1130,6 @@ ml_do_all(data, 2, 'withinCtry/ml_elderly_ap',
 
 
 ## AP vs GINI ------------------------------------------------------------------
-
 data <- ap_gini_medi %>%
   dplyr::rename_with(~ "decile", contains("decile")) %>%
   dplyr::rename_with(~ "gini_decile", contains("medi")) %>% 

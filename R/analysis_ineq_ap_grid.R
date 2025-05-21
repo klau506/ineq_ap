@@ -11,18 +11,22 @@ source("R/zzz.R")
 normalized <- T
 split_num <- 5 #10 deciles, 5 quintiles
 map <- T #T if plotted and saved, F otherwise
-yy <- 2030# Load necessary libraries
+yy <- 2030
 
 # Load raster data
-pm_raster <- terra::rast("data/rfasst_output/2030_pm25_fin_weighted.tif")
+
+pm.ap_raster <- terra::rast("data/rfasst_output/2030_pm25_fin_weighted.tif")
+pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_Reference_vintage_eur_v2.RData")); rm(pm.mort_yy); gc()
 inc_pc_2015 <- terra::rast("data/High-resolution_Downscaling/Europe_disp_inc_2015.tif")
 urbn_raster <- terra::rast("data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif")
 pop_ge65 <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-Y_GE65_2021_V2.tiff")
 pop_t <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-T_2021_V2.tiff")
 
 extent_raster <- ext(-26.276, 40.215, 32.633, 71.141)
-pm_raster2 <- terra::crop(pm_raster, extent_raster)
+pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
 inc_pc_20152 <- terra::crop(inc_pc_2015, extent_raster)
+vec <- as.vector(pm.mort_raster[['total']])
+pm.mort_raster <- terra::setValues(pm.ap_raster2, vec)
 
 europe_shp <- rnaturalearth::ne_countries(continent = "Europe", returnclass = "sf") %>% 
   dplyr::filter(adm0_a3 != 'RUS')
@@ -45,9 +49,9 @@ eu_mask[is.na(eu_mask)] <- 0
 
 
 ## AP vs URBN TYPE ===============================================================
-# urbn_raster2 <- terra::resample(urbn_raster, pm_raster)
-# urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
-# writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
+urbn_raster2 <- terra::resample(urbn_raster, pm.ap_raster2)
+urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
+writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
 
 # Define classification function
 classify_function <- function(x) {
@@ -69,13 +73,13 @@ plot(urbn_raster_combined$classification_layer)
 # plot(filtered_raster$classification_layer)
 
 # Filter out NA values directly on the rasters
-pm_raster2 <- crop(pm_raster, extent_raster)
-pm_raster_filtered <- mask(pm_raster2, pm_raster2, maskvalue = NA)
+pm.ap_raster2 <- crop(pm.ap_raster, extent_raster)
+pm.ap_raster_filtered <- mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
 urbn_raster_filtered <- urbn_raster_combined$classification_layer
 urbn_raster_combined_filtered <- mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm_values <- values(pm_raster_filtered)
+pm_values <- values(pm.ap_raster_filtered)
 urbn_values <- values(urbn_raster_combined_filtered)
 
 # Remove NA values
@@ -138,16 +142,16 @@ ggsave(
 
 
 ## AP vs INCOME ===============================================================
-pm_raster2 <- terra::crop(pm_raster, extent_raster)
-inc_pc_20152 <- terra::resample(inc_pc_2015, pm_raster2)
+pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
+inc_pc_20152 <- terra::resample(inc_pc_2015, pm.ap_raster2)
 inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
 
 # Filter out NA values directly on the rasters
-pm_raster_filtered <- mask(pm_raster2, pm_raster2, maskvalue = NA)
+pm.ap_raster_filtered <- mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
 inc_raster_filtered <- mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm_values <- values(pm_raster_filtered)
+pm_values <- values(pm.ap_raster_filtered)
 inc_values <- values(inc_raster_filtered)
 
 # Remove NA values
@@ -253,25 +257,28 @@ if (map) {
 }
 
 ## AP vs ELDERLY ===============================================================
-pm_raster2 <- terra::crop(pm_raster, extent_raster)
+pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
 
-pop_ge652 <- terra::crop(pop_ge65, extent_raster)
-pop_t2 <- terra::crop(pop_t, extent_raster)
+pop_ge652 <- terra::project(pop_ge65, pm.ap_raster2)
+pop_t2 <- terra::project(pop_t, pm.ap_raster2)
+pop_ge652 <- terra::crop(pop_ge652, extent_raster)
+pop_t2 <- terra::crop(pop_t2, extent_raster)
 pop_elderly <- pop_ge652/pop_t2
-# Plot only 1 urbn type
+
+# Plot filtered data
 mask_layer <- pop_elderly[["ESTAT_OBS-VALUE-Y_GE65_2021_V2"]] <= 100 & pop_elderly[["ESTAT_OBS-VALUE-Y_GE65_2021_V2"]] > 0
 filtered_raster <- mask(pop_elderly, mask_layer, maskvalue=FALSE)
 plot(filtered_raster$`ESTAT_OBS-VALUE-Y_GE65_2021_V2`)
 
-pop_elderly2 <- terra::resample(pop_elderly, pm_raster2)
+pop_elderly2 <- terra::resample(pop_elderly, pm.ap_raster2)
 pop_elderly2 <- terra::crop(pop_elderly2, extent_raster)
 
 # Filter out NA values directly on the rasters
-pm_raster_filtered <- mask(pm_raster2, pm_raster2, maskvalue = NA)
+pm.ap_raster_filtered <- mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
 elderly_raster_filtered <- mask(pop_elderly2, pop_elderly2, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm_values <- values(pm_raster_filtered)
+pm_values <- values(pm.ap_raster_filtered)
 pop_elderly <- values(elderly_raster_filtered)
 
 # Remove NA values
@@ -396,3 +403,367 @@ if (map) {
   )
   
 }
+
+
+## DEATHS vs URBN TYPE ===============================================================
+urbn_raster2 <- terra::resample(urbn_raster, pm.mort_raster)
+urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
+writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
+
+# Define classification function
+classify_function <- function(x) {
+  ifelse(x <= 10, 0, 
+         ifelse(x >= 11 & x <= 20, 1, # rural
+                ifelse(x >= 21 & x <= 22, 2, # town/suburb
+                       ifelse(x >= 23 & x <= 30, 3, NA)))) # urban
+}
+
+# Apply classification
+urbn_raster_classified <- app(urbn_raster2, classify_function)
+names(urbn_raster_classified) <- "classification_layer"
+urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
+plot(urbn_raster_combined$classification_layer)
+
+# Filter out NA values directly on the rasters
+pm.mort_raster2 <- crop(pm.mort_raster, extent_raster)
+pm.mort_raster_filtered <- mask(pm.mort_raster2, pm.mort_raster2, maskvalue = NA)
+urbn_raster_filtered <- urbn_raster_combined$classification_layer
+urbn_raster_combined_filtered <- mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
+
+# Convert the filtered rasters to data frames
+pm.mort_values <- values(pm.mort_raster_filtered)
+urbn_values <- values(urbn_raster_combined_filtered)
+
+# Remove NA values
+valid_idx <- !is.na(pm.mort_values) & !is.na(urbn_values)
+df_mort_urbn <- data.frame(pm_mort = pm.mort_values[valid_idx], urbn_type = urbn_values[valid_idx])
+
+df_mort_urbn_no0 <- df_mort_urbn[df_mort_urbn$pm_mort > 0,]
+df_mort_urbn_no0 <- df_mort_urbn_no0[df_mort_urbn_no0$urbn_type > 0,]
+df_mort_urbn_no0 <- unique(df_mort_urbn_no0)
+
+df_medi <- df_mort_urbn_no0 %>%
+  dplyr::group_by(urbn_type) %>%
+  dplyr::summarize(medi = mean(pm_mort)) %>% 
+  dplyr::ungroup()
+
+plot_urbntype_density <- ggplot(df_mort_urbn_no0 %>% 
+                                  dplyr::filter(pm_mort < 5e5),
+                                aes(x = pm_mort, 
+                                    color = as.factor(urbn_type),
+                                    fill = as.factor(urbn_type))) +
+  geom_density(alpha = 0.5) +
+  geom_vline(aes(color = as.factor(urbn_type), xintercept = medi),
+             data = df_medi, linewidth = 1
+  ) +
+  facet_grid(as.factor(urbn_type) ~ ., scales = 'free') +
+  scale_fill_manual(
+    values = urbn_type.color.num,
+    name = "Urban type",
+    labels = urbn_type.labs.num
+  ) +
+  scale_color_manual(
+    values = urbn_type.color.num,
+    name = "Urban type",
+    labels = urbn_type.labs.num
+  ) +
+  labs(
+    x = "PM Deaths",
+    y = "Density"
+  ) +
+  ggpubr::theme_pubr() +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title = element_text(size = legend.text.size),
+    axis.title.y = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    # axis.text.y = element_blank(),
+    # axis.ticks = element_blank(),
+    axis.line = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.text.size),
+    legend.text = element_text(size = legend.text.size),
+  )
+
+ggsave(
+  file = paste0("figures/grid/plot_urbntype_density_mort.pdf"), height = 12, width = 18, units = "cm",
+  plot = plot_urbntype_density
+)
+
+
+
+## DEATHS vs INCOME ===============================================================
+inc_pc_20152 <- terra::project(inc_pc_2015, pm.mort_raster)
+inc_pc_20152 <- resample(inc_pc_20152, pm.mort_raster)
+inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
+
+# Filter out NA values directly on the rasters
+pm.mort_raster_filtered <- mask(pm.mort_raster, pm.mort_raster, maskvalue = NA)
+inc_raster_filtered <- mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
+
+# Convert the filtered rasters to data frames
+pm.mort_values <- values(pm.mort_raster_filtered)
+inc_values <- values(inc_raster_filtered)
+
+# Remove NA values
+valid_idx <- !is.na(pm.mort_values) & !is.na(inc_values)
+df_mort_inc <- data.frame(pm_mort = pm.mort_values[valid_idx], inc_per_capita = inc_values[valid_idx])
+
+df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort > 0,]
+df_mort_inc_no0 <- df_mort_inc_no0[df_mort_inc_no0$inc_per_capita > 0,]
+df_mort_inc_no0 <- unique(df_mort_inc_no0) %>% 
+  dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(inc_per_capita, 5))) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+binned_data <- df_mort_inc_no0 %>%
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(inc_per_capita, 50000))) %>% 
+  dplyr::group_by(quintile, quintile_5) %>%
+  dplyr::summarize(avg_gdp = mean(inc_per_capita),
+                   avg_pm_q = mean(pm_mort)) %>% 
+  dplyr::ungroup()
+
+if (map) {
+  plot_income_mort <- ggplot(binned_data %>% 
+                             dplyr::filter(avg_gdp < 30000), 
+                           aes(x = avg_gdp, y = avg_pm_q, color = quintile_5)) +
+    geom_point() +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Income Quintiles [2015 PPP]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "", 
+         y = "PM Deaths") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/grid/plot_income_mort.pdf"), height = 20, width = 20, units = "cm",
+    plot = plot_income_mort
+  )
+}
+
+if (map) {
+  df_medi <- df_mort_inc_no0 %>%
+    dplyr::group_by(quintile_5) %>%
+    dplyr::summarize(medi = median(pm_mort)) %>% 
+    dplyr::ungroup()
+  
+  plot_inc_density <- 
+    ggplot(df_mort_inc_no0 %>% 
+             dplyr::filter(pm_mort < 5000),
+           aes(x = pm_mort, 
+               color = quintile_5,
+               fill = quintile_5)) +
+    geom_density(alpha = 0.5) +
+    geom_vline(aes(color = quintile_5, xintercept = medi),
+               data = df_medi, linewidth = 1
+    ) +
+    facet_grid(quintile_5 ~ .) +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "Income Quintiles",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Income Quintiles",
+      labels = quintiles.labs
+    ) +
+    labs(
+      x = "PM Deaths",
+      y = "Density"
+    ) +
+    ggpubr::theme_pubr() +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = legend.text.size),
+      strip.background = element_blank(),
+      axis.title = element_text(size = legend.text.size),
+      axis.title.y = element_blank(),
+      axis.text = element_text(size = legend.text.size),
+      axis.text.y = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank(),
+      legend.key.size = unit(0.6, "cm"),
+      legend.title = element_text(size = legend.text.size),
+      legend.text = element_text(size = legend.text.size),
+    )
+  
+  ggsave(
+    file = paste0("figures/grid/plot_income_density_mort.pdf"), height = 12, width = 18, units = "cm",
+    plot = plot_inc_density
+  )
+  
+}
+
+## DEATHS vs ELDERLY ===============================================================
+pop_ge652 <- terra::project(pop_ge65, pm.mort_raster)
+pop_ge652 <- resample(pop_ge652, pm.mort_raster)
+pop_ge652 <- terra::crop(pop_ge652, extent_raster)
+
+pop_t2 <- terra::project(pop_t, pm.mort_raster)
+pop_t2 <- resample(pop_t2, pm.mort_raster)
+pop_t2 <- terra::crop(pop_t2, extent_raster)
+
+pop_elderly <- pop_ge652/pop_t2
+
+# Plot filtered data
+mask_layer <- pop_elderly[["ESTAT_OBS-VALUE-Y_GE65_2021_V2"]] <= 500 & pop_elderly[["ESTAT_OBS-VALUE-Y_GE65_2021_V2"]] > 0
+filtered_raster <- mask(pop_elderly, mask_layer, maskvalue=FALSE)
+plot(filtered_raster$`ESTAT_OBS-VALUE-Y_GE65_2021_V2`)
+
+pop_elderly2 <- terra::resample(pop_elderly, pm.mort_raster)
+pop_elderly2 <- terra::crop(pop_elderly2, extent_raster)
+
+# Filter out NA values directly on the rasters
+pm.mort_raster_filtered <- mask(pm.mort_raster, pm.mort_raster, maskvalue = NA)
+elderly_raster_filtered <- mask(pop_elderly2, pop_elderly2, maskvalue = NA)
+
+# Convert the filtered rasters to data frames
+pm.mort_values <- values(pm.mort_raster_filtered)
+pop_elderly <- values(elderly_raster_filtered)
+
+# Remove NA values
+valid_idx <- !is.na(pm.mort_values) & !is.na(pop_elderly)
+df_mort_eld <- data.frame(pm_mort = pm.mort_values[valid_idx], pop_elderly_per = pop_elderly[valid_idx])
+
+df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0,]
+df_mort_eld_no0 <- df_mort_eld_no0[df_mort_eld_no0$pop_elderly_per > 0,]
+df_mort_eld_no0 <- unique(df_mort_eld_no0) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
+  dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(pop_elderly_per, 5))) 
+
+binned_data <- df_mort_eld_no0 %>%
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(pop_elderly_per, 50000))) %>% 
+  dplyr::group_by(quintile, quintile_5) %>%
+  dplyr::summarize(avg_eld = mean(pop_elderly_per),
+                   avg_pm_q = mean(pm_mort)) %>% 
+  dplyr::ungroup()
+
+
+if (map) {
+  plot_elderly_mort <- ggplot(binned_data, 
+                            aes(x = avg_eld, y = avg_pm_q, color = quintile_5)) +
+    geom_point() +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Elderly Quintiles [%]",
+      labels = quintiles.labs
+    ) +
+    labs(x = "", 
+         y = "PM Deaths") +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = 12),
+      strip.background = element_blank(),
+      axis.title.x = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.key.size = unit(1.5, "cm"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.position = "bottom"
+    )
+  
+  ggsave(
+    file = paste0("figures/grid/plot_elderly_mort.pdf"), height = 20, width = 20, units = "cm",
+    plot = plot_elderly_mort
+  )
+}
+
+if (map) {
+  df_medi <- df_mort_eld_no0 %>%
+    dplyr::group_by(quintile_5) %>%
+    dplyr::summarize(medi = median(pm_mort)) %>% 
+    dplyr::ungroup()
+  
+  df_mort_eld_no0 %>%
+    dplyr::group_by(quintile_5) %>%
+    dplyr::summarise(
+      min_per_elderly = min(pop_elderly_per, na.rm = TRUE),
+      max_per_elderly = max(pop_elderly_per, na.rm = TRUE),
+      mean_per_elderly = mean(pop_elderly_per, na.rm = TRUE),
+      median_per_elderly = median(pop_elderly_per, na.rm = TRUE),
+      sd_per_elderly = sd(pop_elderly_per, na.rm = TRUE),
+      n = dplyr::n()
+    )
+  # # A tibble: 5 x 7
+  # quintile_5 min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly      n
+  # <fct>                <dbl>           <dbl>            <dbl>              <dbl>          <dbl>  <int>
+  # 1 1                 2.13e-40           0.144           0.0908              0.105         0.0451 618342
+  # 2 2                 1.44e- 1           0.193           0.170               0.171         0.0138 618342
+  # 3 3                 1.93e- 1           0.237           0.214               0.214         0.0128 618341
+  # 4 4                 2.37e- 1           0.305           0.267               0.265         0.0191 618341
+  # 5 5                 3.05e- 1           1.00            0.428               0.381         0.131  618341
+  
+  
+  plot_eld_density <- 
+    ggplot(df_mort_eld_no0 %>% 
+             dplyr::filter(pm_mort < 2500),
+           aes(x = pm_mort, 
+               color = quintile_5,
+               fill = quintile_5)) +
+    geom_density(alpha = 0.5) +
+    geom_vline(aes(color = quintile_5, xintercept = medi),
+               data = df_medi, linewidth = 1
+    ) +
+    facet_grid(quintile_5 ~ .) +
+    scale_fill_manual(
+      values = quintiles.color,
+      name = "Elderly Quintiles",
+      labels = quintiles.labs
+    ) +
+    scale_color_manual(
+      values = quintiles.color,
+      name = "Elderly Quintiles",
+      labels = quintiles.labs
+    ) +
+    labs(
+      x = "PM Deaths",
+      y = "Density"
+    ) +
+    ggpubr::theme_pubr() +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = legend.text.size),
+      strip.background = element_blank(),
+      axis.title = element_text(size = legend.text.size),
+      axis.title.y = element_blank(),
+      axis.text = element_text(size = legend.text.size),
+      axis.text.y = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank(),
+      legend.key.size = unit(0.6, "cm"),
+      legend.title = element_text(size = legend.text.size),
+      legend.text = element_text(size = legend.text.size),
+    )
+  
+  ggsave(
+    file = paste0("figures/grid/plot_elderly_density_mort.pdf"), height = 12, width = 18, units = "cm",
+    plot = plot_eld_density
+  )
+  
+}
+
+

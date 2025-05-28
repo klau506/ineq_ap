@@ -29,7 +29,7 @@ rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>%
 ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
   dplyr::filter(year == yy)
 
-deaths <- get(load(paste0("data/rfasst_output/m3_get_mort_pm25.output.RData"))) %>%
+deaths <- get(load(paste0("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
   dplyr::filter(year == yy)
 if (normalized) {
@@ -92,7 +92,7 @@ if (map) {
 
 
 # PM2.5 grid level
-pm25_weighted <- terra::rast("C:/Users/claudia.rodes/Documents/GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/2005_pm25_fin_weighted.tif")
+pm25_weighted <- terra::rast("C:/Users/claudia.rodes/Documents/GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/Reference_vintage_eur_v2_2005_pm25_fin_weighted.tif")
 png(filename = "figures/meth_sketch/plot_ap_grid_w.png",
     width = 100 * 3, height = 50 * 3, units = "mm", res = 300)
 terra::plot(pm25_weighted, col = grDevices::terrain.colors(50), axes = FALSE, box = FALSE, legend = FALSE)
@@ -175,6 +175,33 @@ if (map) {
   )
 }
 
+## DEATHS - GRID  ==============================================================
+
+extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
+
+pm.pre <- terra::rast(paste0('../../GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/', 'Reference_vintage_eur_v2', '_', 2030,'_pm25_fin_weighted.tif'))
+pm.pre <- terra::crop(pm.pre, extent_raster)
+
+pm.mort_yy <- get(load(paste0('../../GitHub/rfasst_v2/output/m3/pm25_gridded/EUR_grid/pm.mort_mat_2030_Reference_vintage_eur_v2.RData')))
+vec <- as.vector(pm.mort_yy[['total']])
+pm.mort_rast <- terra::setValues(pm.pre, vec)
+
+plot <- tmap::tm_shape(pm.mort_rast, projection = "EPSG:3035") +
+  tmap::tm_raster(
+    palette = c("#D3D3D3", "#FFF9C4", "#FFEB3B", "#FF9800", "#e64602", "#ab0000", "#4d0073"),
+    breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1, 2, max(na.omit(vec), na.rm = TRUE)),
+    title = "PM2.5 Attributable Mortality",
+    legend.show = TRUE
+  ) +
+  tmap::tm_layout(legend.show = FALSE, 
+                  legend.text.size = 0.2,
+                  legend.title.size = 0.3,
+                  frame = FALSE)
+
+tmap::tmap_save(plot,
+                filename = paste0("figures/meth_sketch/plot_deaths_grid.pdf"),
+                width = 50, height = 50, units = "mm", dpi = 300)
+
 ## AP vs urbn_type  ============================================================
 ap_urbntype_sf <- ap_socioecon_sf %>%
   dplyr::filter(rowSums(is.na(.)) == 0) %>%
@@ -236,20 +263,20 @@ if (map) {
 
 #### GCAM - EUR ================================================================
 # Load world map
-world <- ne_countries(scale = "medium", returnclass = "sf")
+world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
 
 # Fix invalid geometries and wrap dateline
-world <- st_make_valid(world)
-world <- st_wrap_dateline(world, options = c("WRAPDATELINE=YES"))
+world <- sf::st_make_valid(world)
+world <- sf::st_wrap_dateline(world, options = c("WRAPDATELINE=YES"))
 
 # Define EU country codes based on nuts3_plot_data
 eu_countries <- unique(nuts3_plot_data$CNTR_CODE)
 
 # Add a column to classify EU and non-EU countries
 world <- world %>%
-  mutate(eu_status = ifelse(iso_a2 %in% eu_countries, "EU", "Non-EU"))
-world <- world %>% filter(continent != "Antarctica")
-world <- world %>% filter(st_area(geometry) > units::set_units(1000, "km^2"))
+  dplyr::mutate(eu_status = ifelse(iso_a2 %in% eu_countries, "EU", "Non-EU"))
+world <- world %>% dplyr::filter(continent != "Antarctica")
+world <- world %>% dplyr::filter(sf::st_area(geometry) > units::set_units(1000, "km^2"))
 
 plot <- tm_shape(world) +
   tm_polygons("eu_status",

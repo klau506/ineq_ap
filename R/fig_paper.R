@@ -7,6 +7,10 @@ legend.text.size <- 12
 scl <- 20
 spacing_factor = 0.5
 
+extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
+pm.pre <- terra::rast(paste0('../../GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/', 'Reference_vintage_eur_v2', '_', 2030,'_pm25_fin_weighted.tif'))
+pm.pre <- terra::crop(pm.pre, extent_raster)
+
 #### RESULTS NDC CONSEQ ========================================================
 ## AP  -------------------------------------------------------------------------
 ap_nuts3 <- ap %>%
@@ -131,6 +135,53 @@ plot_deaths_gg <- ggplot() +
 ggsave(plot_deaths_gg,
        filename = paste0("figures/plot_deaths", normalized_tag, ".pdf"),
        width = 14, height = 10, units = "cm")
+
+
+
+## GRID - DEATHS  -------------------------------------------------------------------------
+pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_Reference_vintage_eur_v2.RData")); rm(pm.mort_yy); gc()
+pm.mort_raster2 <- terra::setValues(pm.pre, pm.mort_raster[['total']])
+pm.mort_raster2 <- terra::crop(pm.mort_raster2, extent_raster)
+
+filtered_raster <- pm.mort_raster2
+filtered_raster[filtered_raster <= 0] <- NA
+filtered_raster[filtered_raster > 3.5] <- 3.5
+
+pdf("figures/plot_grid_mort.pdf", width = 11/2.54, height = 10/2.54)
+r <- raster::raster(filtered_raster)
+colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
+par(mar = c(0, 0, 0, 0))
+raster::plot(r, 
+             col = colors, 
+             legend = FALSE, 
+             axes = FALSE, 
+             box = FALSE)
+legend_ticks <- c(0, 1, 2, 3, raster::maxValue(r))
+legend_labels <- c("0", "1", "2", "3", paste0(">", floor(max(r[], na.rm = TRUE))))
+raster::plot(r, legend.only = TRUE,
+             col = colors,
+             legend.width = 0.75,
+             legend.shrink = 0.65,
+             axis.args = list(
+               at = legend_ticks,
+               labels = legend_labels,
+               font = 1,
+               cex.axis = 0.6
+             ),
+             legend.args = list(
+               text = 'Premature Deaths\n[Deaths per inhabitants]',
+               side = 3, font = 1, line = 0.5, cex = 0.6
+             ))
+dev.off()
+
+
+# different palette
+pdf("figures/plot_grid_mort_paletteJump.pdf", width = 11/2.54, height = 10/2.54)
+terra::plot(filtered_raster,
+            col = c("#D3D3D3", "#FFF9C4", "#FFEB3B", "#FF9800", "#e64602", "#ab0000"),
+            breaks = c(0, 0.1, 0.5, 1, 2, 3, max(terra::values(filtered_raster), na.rm = TRUE)),
+            legend = TRUE)
+dev.off()
 
 
 
@@ -460,6 +511,117 @@ ggsave(
 
 
 
+
+
+## AP vs INCOME -------------------------------------------------------------
+ap_geo_income <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(geo, income, ap)
+ap_geo_income <- unique(ap_geo_income) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(income, split_num))) %>% 
+  dplyr::group_by(quintile) %>% 
+  dplyr::mutate(c05 = quantile(ap, 0.05),
+                c33 = quantile(ap, 0.33),
+                c50 = quantile(ap, 0.50),
+                c66 = quantile(ap, 0.66),
+                c95 = quantile(ap, 0.95)) %>% 
+  dplyr::ungroup()
+
+plot_ap_income <- ggplot(ap_geo_income) +
+  geom_density(mapping = aes(x = ap,
+                             fill = quintile,
+                             color = quintile),
+               inherit.aes = FALSE,
+               alpha = 0.1,
+               linewidth = 0.8) +
+  geom_jitter(mapping = aes(x = ap,
+                            y = -as.numeric(quintile) * spacing_factor * 1e-1,
+                            color = quintile),
+              linewidth = 0.5,
+              alpha = 0.5,
+              height = 0.02) +
+  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
+                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
+                   x = c05, xend = c05, color = quintile),
+               linewidth = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
+                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
+                   x = c95, xend = c95, color = quintile),
+               linewidth = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1,
+                   yend = -as.numeric(quintile) * spacing_factor * 1e-1,
+                   x = c05, xend = c33, color = quintile),
+               linewidth = 0.8) +
+    geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1,
+                     yend = -as.numeric(quintile) * spacing_factor * 1e-1,
+                     x = c66, xend = c95, color = quintile),
+                 linewidth = 0.8) +
+  geom_rect(aes(ymin = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
+                ymax = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
+                xmin = c33, xmax = c66,
+                color = quintile),
+            fill = "white", alpha = 0.01, linewidth = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
+                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
+                   x = c50, xend = c50,
+                   color = quintile),
+               linewidth = 0.8) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "Income quintiles",
+    labels = quintiles.labs.income.nuts3
+  ) +
+  scale_fill_manual(
+    values = quintiles.color,
+    name = "Income quintiles",
+    labels = quintiles.labs.income.nuts3
+  ) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+  theme_minimal() +
+  labs(x = "PM2.5 concentration [ug/m3]", 
+       y = "",
+       color = "Income quintiles") +
+  theme(
+    panel.background = element_rect(fill = "white", color = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.text.size),
+    legend.text = element_text(size = legend.text.size),
+    legend.position = c(0.87,0.87)
+  )
+
+plot_ap_income
+
+ggsave(
+  file = paste0("figures/plot_ap_income.pdf"), height = 10, width = 18, units = "cm",
+  plot = plot_ap_income
+)
+
+ap_geo_income %>%
+  dplyr::group_by(quintile) %>%
+  dplyr::summarise(
+    min_income = min(income, na.rm = TRUE),
+    max_income = max(income, na.rm = TRUE),
+    mean_income = mean(income, na.rm = TRUE),
+    median_income = median(income, na.rm = TRUE),
+    sd_income = sd(income, na.rm = TRUE),
+    n = dplyr::n()
+  )
+# quintile min_income max_income mean_income median_income sd_income     n
+# <fct>         <dbl>      <dbl>       <dbl>         <dbl>     <dbl> <int>
+# 1 1             2901.     13025.      10839.        11373.     2085.   246
+# 2 2            13057.     16203.      14740.        14812.      997.   246
+# 3 3            16210.     18104.      17138.        17107.      564.   246
+# 4 4            18123.     20570.      19273.        19172.      723.   246
+# 5 5            20571.     46866.      22843.        22129.     3192.   246
 
 
 ## AP vs GINI -------------------------------------------------------------
@@ -1290,6 +1452,61 @@ ggsave(
   plot = plot_ap_urbn
 )
 
+# simple - slides
+df <- data.table::as.data.table(ap_grid_urbn_sample) %>% 
+  dplyr::rename("urbn_type" = "quintile") %>% 
+  dplyr::mutate(urbn_type = factor(urbn_type, levels = c('3','1','2')))
+df_medi <- df[, .(medi = quantile(ap, 0.5, na.rm = T)),
+              by = c("urbn_type")
+]
+
+plot_urbntype_density <- ggplot(df) +
+  geom_density(
+    data = df, aes(
+      x = ap, group = urbn_type,
+      color = urbn_type, fill = urbn_type
+    ),
+    linewidth = 0.8, alpha = 0.25
+  ) +
+  geom_vline(aes(color = urbn_type, xintercept = medi),
+             data = df_medi, linewidth = 1
+  ) +
+  facet_wrap(. ~ urbn_type, nrow = 3, labeller = as_labeller(c("3"="City", "2"="Town/Suburb", "1"="Rural"))) +
+  ggpubr::theme_pubr() +
+  scale_color_manual(
+    values = urbn_type.color.num,
+    name = "Urban type",
+    labels = urbn_type.labs.num
+  ) +
+  scale_fill_manual(
+    values = urbn_type.color.num,
+    name = "Urban type",
+    labels = urbn_type.labs.num
+  ) +
+  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title = element_text(size = legend.text.size),
+    axis.title.y = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.text.size),
+    legend.text = element_text(size = legend.text.size),
+    legend.position = "None"
+  )
+ggsave(
+  file = paste0("figures/plot_grid_urbntype_density_ap.pdf"), height = 12, width = 18, units = "cm",
+  plot = plot_urbntype_density
+)
+# end simple
+
 ap_grid_income %>%
   dplyr::group_by(quintile) %>%
   dplyr::summarise(
@@ -1529,4 +1746,327 @@ ap_grid_per_elderly %>%
 # 3 3           0.299    0.312     0.305       0.306 0.00392   628
 # 4 4           0.312    0.348     0.327       0.327 0.0112    628
 # 5 5           0.348    0.553     0.387       0.380 0.0402    628
+
+
+
+## GRID - Deaths vs URBN_TYPE -------------------------------------------------------------
+deaths_grid_urbn <- unique(df_mort_urbn_no0) %>% 
+  dplyr::rename(quintile = urbn_type,
+                deaths = pm_mort) %>% 
+  dplyr::mutate(quintile = as.factor(quintile)) %>% 
+  dplyr::group_by(quintile) %>% 
+  dplyr::mutate(c05 = quantile(deaths, 0.05),
+                c33 = quantile(deaths, 0.33),
+                c50 = quantile(deaths, 0.50),
+                c66 = quantile(deaths, 0.66),
+                c95 = quantile(deaths, 0.95)) %>% 
+  dplyr::ungroup() # 5541267 datapoints
+deaths_grid_urbn_sample <- deaths_grid_urbn %>% 
+  dplyr::slice_sample(n = 10000) %>% 
+  dplyr::mutate(quintile = forcats::fct_relevel(quintile, '3','2','1'))
+  
+scl = 400
+plot_deaths_urbn <- ggplot(deaths_grid_urbn_sample %>% 
+                             dplyr::filter(deaths < 5)) +
+  geom_density(mapping = aes(x = deaths,
+                             fill = quintile,
+                             color = quintile),
+               inherit.aes = FALSE,
+               alpha = 0.1,
+               linewidth = 0.8) +
+  ylim(-1.5,2.25) +
+  geom_jitter(mapping = aes(x = deaths,
+                            y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
+                            color = quintile),
+              size = 0.5,
+              alpha = 0.5,
+              height = 0.15) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
+                   x = c05, xend = c05, color = quintile),
+               size = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
+                   x = c95, xend = c95, color = quintile),
+               size = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
+                   x = c05, xend = c33, color = quintile),
+               size = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
+                   x = c66, xend = c95, color = quintile),
+               size = 0.8) +
+  geom_rect(aes(ymin = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
+                ymax = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
+                xmin = c33, xmax = c66,
+                color = quintile),
+            fill = "white", alpha = 0.01, size = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
+                   x = c50, xend = c50,
+                   color = quintile),
+               size = 0.8) +
+  scale_color_manual(
+    values = urbn_type.color.num,
+    name = "Urban type",
+    labels = urbn_type.labs.num
+  ) +
+  scale_fill_manual(
+    values = urbn_type.color.num,
+    name = "Urban type",
+    labels = urbn_type.labs.num
+  ) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+  theme_minimal() +
+  labs(x = "Premature deaths [Deaths per inhabitants]", 
+       y = "",
+       color = "Urban type") +
+  theme(
+    panel.background = element_rect(fill = "white", color = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.text.size),
+    legend.text = element_text(size = legend.text.size),
+    legend.position = c(0.87,0.87)
+  )
+
+ggsave(
+  file = paste0("figures/plot_grid_deaths_urbn.pdf"), height = 10, width = 18, units = "cm",
+  plot = plot_deaths_urbn,
+  bg = 'white'
+)
+
+
+
+## GRID - Deaths vs INCOME -------------------------------------------------------------
+deaths_grid_income <- unique(df_mort_inc_no0) %>% 
+  dplyr::rename(income = inc_per_capita,
+                quintile = quintile_5,
+                deaths = pm_mort) %>% 
+  dplyr::group_by(quintile) %>% 
+  dplyr::mutate(c05 = quantile(deaths, 0.05),
+                c33 = quantile(deaths, 0.33),
+                c50 = quantile(deaths, 0.50),
+                c66 = quantile(deaths, 0.66),
+                c95 = quantile(deaths, 0.95)) %>% 
+  dplyr::ungroup() # 5541267 datapoints
+deaths_grid_income_sample <- deaths_grid_income %>% 
+  dplyr::slice_sample(n = 10000)
+  
+scl = 7000
+plot_deaths_income <- ggplot(deaths_grid_income_sample %>% 
+                               dplyr::filter(deaths < 0.15)) + # <2, normal, <0.5, zoom
+  geom_density(mapping = aes(x = deaths,
+                             fill = quintile,
+                             color = quintile),
+               inherit.aes = FALSE,
+               alpha = 0.1,
+               linewidth = 0.8) +
+  geom_jitter(mapping = aes(x = deaths,
+                            y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05,
+                            color = quintile),
+              size = 0.5,
+              alpha = 0.5,
+              height = 3.5) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05 + 9e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05 - 9e-4 * scl,
+                   x = c05, xend = c05, color = quintile),
+               linewidth = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05 + 9e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05 - 9e-4 * scl,
+                   x = c95, xend = c95, color = quintile),
+               linewidth = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05,
+                   x = c05, xend = c33, color = quintile),
+               linewidth = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05,
+                   x = c66, xend = c95, color = quintile),
+               linewidth = 0.8) +
+  geom_rect(aes(ymin = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05 + 9e-4 * scl,
+                ymax = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05 - 9e-4 * scl,
+                xmin = c33, xmax = c66,
+                color = quintile),
+            fill = "white", alpha = 0.01, linewidth = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05 + 9e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.05 - 9e-4 * scl,
+                   x = c50, xend = c50,
+                   color = quintile),
+               linewidth = 0.8) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "income quintiles",
+    labels = quintiles.labs.income.grid
+  ) +
+  scale_fill_manual(
+    values = quintiles.color,
+    name = "income quintiles",
+    labels = quintiles.labs.income.grid
+  ) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+  theme_minimal() +
+  labs(x = "Premature deaths [Deaths per inhabitants]", 
+       y = "",
+       color = "income quintiles") +
+  theme(
+    panel.background = element_rect(fill = "white", color = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.text.size),
+    legend.text = element_text(size = legend.text.size),
+    legend.position = c(0.87,0.87)
+  )
+
+ggsave(
+  file = paste0("figures/plot_grid_deaths_income.pdf"), height = 10, width = 18, units = "cm",
+  plot = plot_deaths_income
+)
+
+deaths_grid_income %>%
+  dplyr::group_by(quintile) %>%
+  dplyr::summarise(
+    min_income = min(income, na.rm = TRUE),
+    max_income = max(income, na.rm = TRUE),
+    mean_income = mean(income, na.rm = TRUE),
+    median_income = median(income, na.rm = TRUE),
+    sd_income = sd(income, na.rm = TRUE),
+    n = dplyr::n()
+  )
+# quintile min_income max_income mean_income median_income sd_income      n
+# <fct>         <dbl>      <dbl>       <dbl>         <dbl>     <dbl>  <int>
+# 1 1             2039.      9105.       7246.         7550.     1393. 850701
+# 2 2             9105.     12139.      10489.        10404.      853. 850701
+# 3 3            12139.     15095.      13871.        14023.      856. 850701
+# 4 4            15095.     17033.      16004.        15979.      543. 850701
+# 5 5            17033.    191019.      19286.        18806.     2187. 850700
+
+
+## GRID - Deaths vs ELDERLY -------------------------------------------------------------
+deaths_grid_per_elderly <- unique(df_mort_eld_no0) %>% 
+  dplyr::rename(per_elderly = pop_elderly_per,
+                quintile = quintile_5,
+                deaths = pm_mort) %>% 
+  dplyr::group_by(quintile) %>% 
+  dplyr::mutate(c05 = quantile(deaths, 0.05),
+                c33 = quantile(deaths, 0.33),
+                c50 = quantile(deaths, 0.50),
+                c66 = quantile(deaths, 0.66),
+                c95 = quantile(deaths, 0.95)) %>% 
+  dplyr::ungroup() # 3519818 datapoints
+deaths_grid_per_elderly_sample <- deaths_grid_per_elderly %>% 
+  dplyr::slice_sample(n = 10000)
+  
+scl = 7000
+plot_deaths_per_elderly <- ggplot(deaths_grid_per_elderly_sample %>% 
+                                    dplyr::filter(deaths < 0.15)) +
+  geom_density(mapping = aes(x = deaths,
+                             fill = quintile,
+                             color = quintile),
+               inherit.aes = FALSE,
+               alpha = 0.1,
+               linewidth = 0.8) +
+  geom_jitter(mapping = aes(x = deaths,
+                            y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
+                            color = quintile),
+              size = 0.5,
+              alpha = 0.5,
+              height = 3.5) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
+                   x = c05, xend = c05, color = quintile),
+               size = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
+                   x = c95, xend = c95, color = quintile),
+               size = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
+                   x = c05, xend = c33, color = quintile),
+               size = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
+                   x = c66, xend = c95, color = quintile),
+               size = 0.8) +
+  geom_rect(aes(ymin = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
+                ymax = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
+                xmin = c33, xmax = c66,
+                color = quintile),
+            fill = "white", alpha = 0.01, size = 0.8) +
+  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
+                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
+                   x = c50, xend = c50,
+                   color = quintile),
+               size = 0.8) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "per_elderly quintiles",
+    labels = quintiles.labs.per_elderly.grid
+  ) +
+  scale_fill_manual(
+    values = quintiles.color,
+    name = "per_elderly quintiles",
+    labels = quintiles.labs.per_elderly.grid
+  ) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+  theme_minimal() +
+  labs(x = "PM2.5 concentration [ug/m3]", 
+       y = "",
+       color = "per_elderly quintiles") +
+  theme(
+    panel.background = element_rect(fill = "white", color = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.text.size),
+    legend.text = element_text(size = legend.text.size),
+    legend.position = c(0.87,0.87)
+  )
+
+ggsave(
+  file = paste0("figures/plot_grid_deaths_per_elderly.pdf"), height = 10, width = 18, units = "cm",
+  plot = plot_deaths_per_elderly
+)
+
+deaths_grid_per_elderly %>%
+  dplyr::group_by(quintile) %>%
+  dplyr::summarise(
+    min_per_elderly = min(per_elderly, na.rm = TRUE),
+    max_per_elderly = max(per_elderly, na.rm = TRUE),
+    mean_per_elderly = mean(per_elderly, na.rm = TRUE),
+    median_per_elderly = median(per_elderly, na.rm = TRUE),
+    sd_per_elderly = sd(per_elderly, na.rm = TRUE),
+    n = dplyr::n()
+  )
+# quintile min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly      n
+# <fct>              <dbl>           <dbl>            <dbl>              <dbl>          <dbl>  <int>
+# 1 1               2.13e-40           0.144           0.0908              0.105         0.0451 618390
+# 2 2               1.44e- 1           0.193           0.170               0.171         0.0138 618390
+# 3 3               1.93e- 1           0.237           0.214               0.214         0.0128 618389
+# 4 4               2.37e- 1           0.305           0.267               0.265         0.0191 618389
+# 5 5               3.05e- 1           1.00            0.428               0.381         0.131  618389
 

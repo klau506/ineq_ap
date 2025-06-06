@@ -1107,7 +1107,7 @@ data <- ap_income_medi %>%
   dplyr::rename(country = ctry) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
 
-ml_do_all(data, 2, 'withinCtry/ml_income',
+ml_do_all(data, 8, 'withinCtry/ml_income',
           fig_legend = "Income\nper capita\nquintile",
           fig_ox_label = "PM2.5 concentration [ug/m3]",
           fix = T)

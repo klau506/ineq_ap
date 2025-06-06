@@ -22,11 +22,16 @@ urbn_raster <- terra::rast("data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS
 pop_ge65 <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-Y_GE65_2021_V2.tiff")
 pop_t <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-T_2021_V2.tiff")
 
-extent_raster <- ext(-26.276, 40.215, 32.633, 71.141)
+extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
 pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
 inc_pc_20152 <- terra::crop(inc_pc_2015, extent_raster)
 vec <- as.vector(pm.mort_raster[['total']])
 pm.mort_raster <- terra::setValues(pm.ap_raster2, vec)
+
+pop_t2 <- terra::project(pop_t, pm.mort_raster)
+pop_t2 <- resample(pop_t2, pm.mort_raster)
+pop_t2 <- terra::crop(pop_t2, extent_raster)
+pm.mort_raster <- pm.mort_raster
 
 europe_shp <- rnaturalearth::ne_countries(continent = "Europe", returnclass = "sf") %>% 
   dplyr::filter(adm0_a3 != 'RUS')
@@ -442,13 +447,15 @@ df_mort_urbn_no0 <- df_mort_urbn[df_mort_urbn$pm_mort > 0,]
 df_mort_urbn_no0 <- df_mort_urbn_no0[df_mort_urbn_no0$urbn_type > 0,]
 df_mort_urbn_no0 <- unique(df_mort_urbn_no0)
 
+df_mort_urbn_no0$urbn_type <- factor(df_mort_urbn_no0$urbn_type, levels = c('3','2','1'))
+
 df_medi <- df_mort_urbn_no0 %>%
   dplyr::group_by(urbn_type) %>%
   dplyr::summarize(medi = mean(pm_mort)) %>% 
   dplyr::ungroup()
 
 plot_urbntype_density <- ggplot(df_mort_urbn_no0 %>% 
-                                  dplyr::filter(pm_mort < 5e5),
+                                  dplyr::filter(pm_mort < 5),
                                 aes(x = pm_mort, 
                                     color = as.factor(urbn_type),
                                     fill = as.factor(urbn_type))) +
@@ -468,7 +475,7 @@ plot_urbntype_density <- ggplot(df_mort_urbn_no0 %>%
     labels = urbn_type.labs.num
   ) +
   labs(
-    x = "PM Deaths",
+    x = "Premature Deaths [Deaths per inhabitants]",
     y = "Density"
   ) +
   ggpubr::theme_pubr() +
@@ -566,7 +573,7 @@ if (map) {
   
   plot_inc_density <- 
     ggplot(df_mort_inc_no0 %>% 
-             dplyr::filter(pm_mort < 5000),
+             dplyr::filter(pm_mort < 0.05),
            aes(x = pm_mort, 
                color = quintile_5,
                fill = quintile_5)) +
@@ -718,7 +725,7 @@ if (map) {
   
   plot_eld_density <- 
     ggplot(df_mort_eld_no0 %>% 
-             dplyr::filter(pm_mort < 2500),
+             dplyr::filter(pm_mort < 0.05),
            aes(x = pm_mort, 
                color = quintile_5,
                fill = quintile_5)) +

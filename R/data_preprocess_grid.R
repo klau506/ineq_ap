@@ -227,8 +227,8 @@ ggplot(data = aa) +
 
 #### rfasst output =============================================================
 ## load dummy PM2.5 concentration & premature deaths by NUTS3
-ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData"))
-deaths <- get(load("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData")) %>%
+ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_nuts.output.RData"))
+deaths <- get(load("data/rfasst_output/necp_m3_get_mort_pm25.output.RData")) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario)
 
 

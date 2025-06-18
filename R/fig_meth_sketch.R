@@ -26,10 +26,10 @@ rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>%
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
   dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
 
-ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
+ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
   dplyr::filter(year == yy)
 
-deaths <- get(load(paste0("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData"))) %>%
+deaths <- get(load(paste0("data/rfasst_output/necp_m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
   dplyr::filter(year == yy)
 if (normalized) {

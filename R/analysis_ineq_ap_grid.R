@@ -15,8 +15,8 @@ yy <- 2030
 
 # Load raster data
 
-pm.ap_raster <- terra::rast("data/rfasst_output/2030_pm25_fin_weighted.tif")
-pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_Reference_vintage_eur_v2.RData")); rm(pm.mort_yy); gc()
+pm.ap_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
+pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_EU_NECP_LTT.RData")); rm(pm.mort_yy); gc()
 inc_pc_2015 <- terra::rast("data/High-resolution_Downscaling/Europe_disp_inc_2015.tif")
 urbn_raster <- terra::rast("data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif")
 pop_ge65 <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-Y_GE65_2021_V2.tiff")
@@ -29,13 +29,13 @@ vec <- as.vector(pm.mort_raster[['total']])
 pm.mort_raster <- terra::setValues(pm.ap_raster2, vec)
 
 pop_t2 <- terra::project(pop_t, pm.mort_raster)
-pop_t2 <- resample(pop_t2, pm.mort_raster)
+pop_t2 <- terra::resample(pop_t2, pm.mort_raster)
 pop_t2 <- terra::crop(pop_t2, extent_raster)
 pm.mort_raster <- pm.mort_raster
 
 europe_shp <- rnaturalearth::ne_countries(continent = "Europe", returnclass = "sf") %>% 
   dplyr::filter(adm0_a3 != 'RUS')
-eu_mask <- vect(europe_shp)
+eu_mask <- terra::vect(europe_shp)
 eu_mask <- terra::crop(eu_mask, extent_raster)
 eu_mask[!is.na(eu_mask)] <- 1
 eu_mask[is.na(eu_mask)] <- 0
@@ -56,7 +56,7 @@ eu_mask[is.na(eu_mask)] <- 0
 ## AP vs URBN TYPE ===============================================================
 urbn_raster2 <- terra::resample(urbn_raster, pm.ap_raster2)
 urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
-writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
+# writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
 
 # Define classification function
 classify_function <- function(x) {
@@ -67,10 +67,10 @@ classify_function <- function(x) {
 }
 
 # Apply classification
-urbn_raster_classified <- app(urbn_raster2, classify_function)
+urbn_raster_classified <- terra::app(urbn_raster2, classify_function)
 names(urbn_raster_classified) <- "classification_layer"
 urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
-plot(urbn_raster_combined$classification_layer)
+terra::plot(urbn_raster_combined$classification_layer)
 
 # Plot only 1 urbn type
 # mask_layer <- urbn_raster_combined[["classification_layer"]] == 2
@@ -78,14 +78,14 @@ plot(urbn_raster_combined$classification_layer)
 # plot(filtered_raster$classification_layer)
 
 # Filter out NA values directly on the rasters
-pm.ap_raster2 <- crop(pm.ap_raster, extent_raster)
-pm.ap_raster_filtered <- mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
+pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
 urbn_raster_filtered <- urbn_raster_combined$classification_layer
-urbn_raster_combined_filtered <- mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
+urbn_raster_combined_filtered <- terra::mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm_values <- values(pm.ap_raster_filtered)
-urbn_values <- values(urbn_raster_combined_filtered)
+pm_values <- terra::values(pm.ap_raster_filtered)
+urbn_values <- terra::values(urbn_raster_combined_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(urbn_values)
@@ -152,12 +152,12 @@ inc_pc_20152 <- terra::resample(inc_pc_2015, pm.ap_raster2)
 inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
 
 # Filter out NA values directly on the rasters
-pm.ap_raster_filtered <- mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
-inc_raster_filtered <- mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
+pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+inc_raster_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm_values <- values(pm.ap_raster_filtered)
-inc_values <- values(inc_raster_filtered)
+pm_values <- terra::values(pm.ap_raster_filtered)
+inc_values <- terra::values(inc_raster_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(inc_values)
@@ -272,19 +272,19 @@ pop_elderly <- pop_ge652/pop_t2
 
 # Plot filtered data
 mask_layer <- pop_elderly[["ESTAT_OBS-VALUE-Y_GE65_2021_V2"]] <= 100 & pop_elderly[["ESTAT_OBS-VALUE-Y_GE65_2021_V2"]] > 0
-filtered_raster <- mask(pop_elderly, mask_layer, maskvalue=FALSE)
-plot(filtered_raster$`ESTAT_OBS-VALUE-Y_GE65_2021_V2`)
+filtered_raster <- terra::mask(pop_elderly, mask_layer, maskvalue=FALSE)
+terra::plot(filtered_raster$`ESTAT_OBS-VALUE-Y_GE65_2021_V2`)
 
 pop_elderly2 <- terra::resample(pop_elderly, pm.ap_raster2)
 pop_elderly2 <- terra::crop(pop_elderly2, extent_raster)
 
 # Filter out NA values directly on the rasters
-pm.ap_raster_filtered <- mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
-elderly_raster_filtered <- mask(pop_elderly2, pop_elderly2, maskvalue = NA)
+pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+elderly_raster_filtered <- terra::mask(pop_elderly2, pop_elderly2, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm_values <- values(pm.ap_raster_filtered)
-pop_elderly <- values(elderly_raster_filtered)
+pm_values <- terra::values(pm.ap_raster_filtered)
+pop_elderly <- terra::values(elderly_raster_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(pop_elderly)
@@ -413,7 +413,7 @@ if (map) {
 ## DEATHS vs URBN TYPE ===============================================================
 urbn_raster2 <- terra::resample(urbn_raster, pm.mort_raster)
 urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
-writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
+# writeRaster(urbn_raster2, 'data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif')
 
 # Define classification function
 classify_function <- function(x) {
@@ -424,20 +424,20 @@ classify_function <- function(x) {
 }
 
 # Apply classification
-urbn_raster_classified <- app(urbn_raster2, classify_function)
+urbn_raster_classified <- terra::app(urbn_raster2, classify_function)
 names(urbn_raster_classified) <- "classification_layer"
 urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
-plot(urbn_raster_combined$classification_layer)
+terra::plot(urbn_raster_combined$classification_layer)
 
 # Filter out NA values directly on the rasters
-pm.mort_raster2 <- crop(pm.mort_raster, extent_raster)
-pm.mort_raster_filtered <- mask(pm.mort_raster2, pm.mort_raster2, maskvalue = NA)
+pm.mort_raster2 <- terra::crop(pm.mort_raster, extent_raster)
+pm.mort_raster_filtered <- terra::mask(pm.mort_raster2, pm.mort_raster2, maskvalue = NA)
 urbn_raster_filtered <- urbn_raster_combined$classification_layer
-urbn_raster_combined_filtered <- mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
+urbn_raster_combined_filtered <- terra::mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm.mort_values <- values(pm.mort_raster_filtered)
-urbn_values <- values(urbn_raster_combined_filtered)
+pm.mort_values <- terra::values(pm.mort_raster_filtered)
+urbn_values <- terra::values(urbn_raster_combined_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm.mort_values) & !is.na(urbn_values)
@@ -502,19 +502,18 @@ ggsave(
 )
 
 
-
 ## DEATHS vs INCOME ===============================================================
 inc_pc_20152 <- terra::project(inc_pc_2015, pm.mort_raster)
 inc_pc_20152 <- resample(inc_pc_20152, pm.mort_raster)
 inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
 
 # Filter out NA values directly on the rasters
-pm.mort_raster_filtered <- mask(pm.mort_raster, pm.mort_raster, maskvalue = NA)
-inc_raster_filtered <- mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
+pm.mort_raster_filtered <- terra::mask(pm.mort_raster, pm.mort_raster, maskvalue = NA)
+inc_raster_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm.mort_values <- values(pm.mort_raster_filtered)
-inc_values <- values(inc_raster_filtered)
+pm.mort_values <- terra::values(pm.mort_raster_filtered)
+inc_values <- terra::values(inc_raster_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm.mort_values) & !is.na(inc_values)
@@ -544,7 +543,7 @@ if (map) {
       labels = quintiles.labs
     ) +
     labs(x = "", 
-         y = "PM Deaths") +
+         y = "Premature Deaths [Deaths per inhabitants]") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -593,7 +592,7 @@ if (map) {
       labels = quintiles.labs
     ) +
     labs(
-      x = "PM Deaths",
+      x = "Premature Deaths [Deaths per inhabitants]",
       y = "Density"
     ) +
     ggpubr::theme_pubr() +
@@ -634,19 +633,19 @@ pop_elderly <- pop_ge652/pop_t2
 
 # Plot filtered data
 mask_layer <- pop_elderly[["ESTAT_OBS-VALUE-Y_GE65_2021_V2"]] <= 500 & pop_elderly[["ESTAT_OBS-VALUE-Y_GE65_2021_V2"]] > 0
-filtered_raster <- mask(pop_elderly, mask_layer, maskvalue=FALSE)
+filtered_raster <- terra::mask(pop_elderly, mask_layer, maskvalue=FALSE)
 plot(filtered_raster$`ESTAT_OBS-VALUE-Y_GE65_2021_V2`)
 
 pop_elderly2 <- terra::resample(pop_elderly, pm.mort_raster)
 pop_elderly2 <- terra::crop(pop_elderly2, extent_raster)
 
 # Filter out NA values directly on the rasters
-pm.mort_raster_filtered <- mask(pm.mort_raster, pm.mort_raster, maskvalue = NA)
-elderly_raster_filtered <- mask(pop_elderly2, pop_elderly2, maskvalue = NA)
+pm.mort_raster_filtered <- terra::mask(pm.mort_raster, pm.mort_raster, maskvalue = NA)
+elderly_raster_filtered <- terra::mask(pop_elderly2, pop_elderly2, maskvalue = NA)
 
 # Convert the filtered rasters to data frames
-pm.mort_values <- values(pm.mort_raster_filtered)
-pop_elderly <- values(elderly_raster_filtered)
+pm.mort_values <- terra::values(pm.mort_raster_filtered)
+pop_elderly <- terra::values(elderly_raster_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm.mort_values) & !is.na(pop_elderly)
@@ -676,7 +675,7 @@ if (map) {
       labels = quintiles.labs
     ) +
     labs(x = "", 
-         y = "PM Deaths") +
+         y = "Premature Deaths [Deaths per inhabitants]") +
     theme(
       panel.background = element_rect(fill = "white"),
       panel.grid.major = element_line(colour = "grey90"),
@@ -745,7 +744,7 @@ if (map) {
       labels = quintiles.labs
     ) +
     labs(
-      x = "PM Deaths",
+      x = "Premature Deaths [Deaths per inhabitants]",
       y = "Density"
     ) +
     ggpubr::theme_pubr() +

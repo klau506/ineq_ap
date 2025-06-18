@@ -33,7 +33,7 @@ plot_ap_gg <- ggplot() +
   geom_sf(data = nuts3_plot_data, fill = "lightgrey", color = NA) +
     geom_sf(data = ap_nuts3_sf, 
           aes(fill = ap), 
-          # color = "black",
+          color = "black",
           color = NA,
           size = 0.0001) + 
   scale_fill_distiller(palette = "Blues", direction = 1, 
@@ -62,23 +62,23 @@ ggsave(plot_ap_gg,
 
 
 ## GRID - AP  -------------------------------------------------------------------------
-pm_raster <- terra::rast("data/rfasst_output/2030_pm25_fin_weighted.tif")
+pm_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
 extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
 pm_raster2 <- terra::crop(pm_raster, extent_raster)
 eu_mask <- terra::crop(eu_mask, extent_raster)
 pm_raster2_europe <- terra::mask(pm_raster2, eu_mask)
-plot(pm_raster2_europe)
+terra::plot(pm_raster2_europe)
 
 pdf("figures/plot_grid_ap.pdf", width = 11/2.54, height = 10/2.54)
 par(mar = c(0,0,0,0))
 r <- raster::raster(pm_raster2_europe)
-plot(r, 
+terra::plot(r, 
      col = colorRampPalette(RColorBrewer::brewer.pal(9, "Blues"))(100), 
      legend = FALSE, 
      axes = FALSE, 
      box = FALSE)
 r.range <- c(raster::minValue(r), raster::maxValue(r))
-plot(r, legend.only=TRUE,     
+terra::plot(r, legend.only=TRUE,     
      col = colorRampPalette(RColorBrewer::brewer.pal(9, "Blues"))(100), 
      legend.width=0.75, legend.shrink=0.65,
      axis.args=list(font=1,
@@ -139,7 +139,7 @@ ggsave(plot_deaths_gg,
 
 
 ## GRID - DEATHS  -------------------------------------------------------------------------
-pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_Reference_vintage_eur_v2.RData")); rm(pm.mort_yy); gc()
+pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_EU_NECP_LTT.RData")); rm(pm.mort_yy); gc()
 pm.mort_raster2 <- terra::setValues(pm.pre, pm.mort_raster[['total']])
 pm.mort_raster2 <- terra::crop(pm.mort_raster2, extent_raster)
 
@@ -332,6 +332,8 @@ deaths_ctryy <- deaths_ctry %>%
   dplyr::filter(LEVL_CODE == 0)
 
 deaths_ctry_sf <- sf::st_sf(deaths_ctryy, geometry = deaths_ctryy$geometry)
+
+deaths_ctry_sf$deaths[deaths_ctry_sf$deaths > 25] <- 25
 
 plot_deaths_gg <- ggplot() +
   geom_sf(data = ctry_plot_data, fill = "lightgrey", color = NA) +
@@ -840,11 +842,11 @@ ap_geo_per_elderly %>%
   )
 # quintile min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly     n
 # <fct>              <dbl>           <dbl>            <dbl>              <dbl>          <dbl> <int>
-# 1 1                 0.0645           0.187            0.166              0.173        0.0192    223
-# 2 2                 0.187            0.209            0.199              0.200        0.00636   223
-# 3 3                 0.209            0.227            0.218              0.218        0.00513   222
-# 4 4                 0.227            0.247            0.237              0.237        0.00561   222
-# 5 5                 0.247            0.344            0.269              0.263        0.0195    222
+# 1 1                 0.0276           0.175            0.135              0.147        0.0365    296
+# 2 2                 0.175            0.202            0.190              0.191        0.00779   296
+# 3 3                 0.202            0.222            0.212              0.212        0.00562   296
+# 4 4                 0.222            0.244            0.233              0.232        0.00630   295
+# 5 5                 0.244            0.354            0.266              0.261        0.0193    295
 
 
 
@@ -1015,9 +1017,9 @@ deaths_geo_urbn_type %>%
   )
 # quintile    min_deaths max_deaths mean_deaths median_deaths sd_deaths     n
 # <fct>            <dbl>      <dbl>       <dbl>         <dbl>     <dbl> <int>
-# 1 City             20.6        860.        309.          312.      102.   371
-# 2 Town/Suburb       7.88       949.        360.          345.      154.   585
-# 3 Rural             2.31       883.        340.          336.      144.   428
+# 1 City             20.6        686.        285.          294.      83.8   371
+# 2 Town/Suburb       7.88       755.        325.          320.     125.    585
+# 3 Rural             2.31       759.        302.          307.     116.    428
 
 
 
@@ -1239,11 +1241,11 @@ deaths_geo_income %>%
   )
 # quintile min_income max_income mean_income median_income sd_income     n
 # <fct>         <dbl>      <dbl>       <dbl>         <dbl>     <dbl> <int>
-# 1 1             2901.     12981.      10814.        11317.     2083.   729
-# 2 2            13015.     16223.      14715.        14764.     1010.   729
-# 3 3            16223.     18125.      17147.        17122.      564.   729
-# 4 4            18125.     20571.      19293.        19241.      717.   729
-# 5 5            20571.     46866.      22851.        22122.     3204.   728
+# 1 1             2901.     13015.      10823.        11337.     2087.   244
+# 2 2            13025.     16210.      14728.        14787.     1006.   244
+# 3 3            16223.     18125.      17145.        17120.      567.   244
+# 4 4            18153.     20571.      19296.        19241.      719.   243
+# 5 5            20585.     46866.      22849.        22122.     3207.   243
 
 
 
@@ -1507,24 +1509,6 @@ ggsave(
 )
 # end simple
 
-ap_grid_income %>%
-  dplyr::group_by(quintile) %>%
-  dplyr::summarise(
-    min_income = min(income, na.rm = TRUE),
-    max_income = max(income, na.rm = TRUE),
-    mean_income = mean(income, na.rm = TRUE),
-    median_income = median(income, na.rm = TRUE),
-    sd_income = sd(income, na.rm = TRUE),
-    n = dplyr::n()
-  )
-# quintile min_income max_income mean_income median_income sd_income       n
-# <fct>         <dbl>      <dbl>       <dbl>         <dbl>     <dbl>   <int>
-# 1 1             1586.      6016.       4176.         3894.     1000. 1108254
-# 2 2             6016.     10013.       8203.         8421.     1221. 1108254
-# 3 3            10013.     14098.      11905.        11743.     1254. 1108253
-# 4 4            14098.     16526.      15360.        15377.      674. 1108253
-# 5 5            16526.    191019.      18791.        18271.     2203. 1108253
-
 
 ## GRID - AP vs INCOME -------------------------------------------------------------
 ap_grid_income <- unique(df_ap_inc_no0) %>% 
@@ -1741,11 +1725,11 @@ ap_grid_per_elderly %>%
   )
 # quintile min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly     n
 # <fct>       <dbl>    <dbl>     <dbl>       <dbl>   <dbl> <int>
-# 1 1           0.204    0.285     0.270       0.271 0.0129    629
-# 2 2           0.285    0.299     0.292       0.291 0.00355   629
-# 3 3           0.299    0.312     0.305       0.306 0.00392   628
-# 4 4           0.312    0.348     0.327       0.327 0.0112    628
-# 5 5           0.348    0.553     0.387       0.380 0.0402    628
+# 1 1               2.76e-29           0.144           0.0899              0.103         0.0447 614074
+# 2 2               1.44e- 1           0.193           0.170               0.170         0.0139 614074
+# 3 3               1.93e- 1           0.237           0.215               0.214         0.0128 614074
+# 4 4               2.37e- 1           0.306           0.268               0.266         0.0195 614074
+# 5 5               3.06e- 1           1.00            0.437               0.385         0.141  614073
 
 
 
@@ -1952,11 +1936,11 @@ deaths_grid_income %>%
   )
 # quintile min_income max_income mean_income median_income sd_income      n
 # <fct>         <dbl>      <dbl>       <dbl>         <dbl>     <dbl>  <int>
-# 1 1             2039.      9105.       7246.         7550.     1393. 850701
-# 2 2             9105.     12139.      10489.        10404.      853. 850701
-# 3 3            12139.     15095.      13871.        14023.      856. 850701
-# 4 4            15095.     17033.      16004.        15979.      543. 850701
-# 5 5            17033.    191019.      19286.        18806.     2187. 850700
+# 1 1             2039.      9051.       7206.         7496.     1382. 832628
+# 2 2             9051.     11970.      10394.        10318.      823. 832627
+# 3 3            11970.     15090.      13809.        13987.      911. 832627
+# 4 4            15090.     17023.      15996.        15972.      541. 832627
+# 5 5            17023.    191019.      19302.        18830.     2197. 832627
 
 
 ## GRID - Deaths vs ELDERLY -------------------------------------------------------------
@@ -2064,9 +2048,9 @@ deaths_grid_per_elderly %>%
   )
 # quintile min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly      n
 # <fct>              <dbl>           <dbl>            <dbl>              <dbl>          <dbl>  <int>
-# 1 1               2.13e-40           0.144           0.0908              0.105         0.0451 618390
-# 2 2               1.44e- 1           0.193           0.170               0.171         0.0138 618390
-# 3 3               1.93e- 1           0.237           0.214               0.214         0.0128 618389
-# 4 4               2.37e- 1           0.305           0.267               0.265         0.0191 618389
-# 5 5               3.05e- 1           1.00            0.428               0.381         0.131  618389
+# 1 1               2.43e-40           0.143           0.0898              0.103         0.0445 612460
+# 2 2               1.43e- 1           0.191           0.169               0.169         0.0137 612459
+# 3 3               1.91e- 1           0.236           0.213               0.213         0.0127 612459
+# 4 4               2.36e- 1           0.303           0.265               0.263         0.0191 612459
+# 5 5               3.03e- 1           1.00            0.440               0.381         0.158  612459
 

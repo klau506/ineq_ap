@@ -10,3 +10,4 @@ data/.Rhistory
 /paper
 *.ipynb
 *.npy
+/figures - dummy

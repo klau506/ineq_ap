@@ -29,7 +29,7 @@ rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>%
 save(rfasst_pop, file = "data/tmp/rfasst_pop.RData")
 
 #### rfasst output data ========================================================
-ap <- get(load("data/rfasst_output/tmp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
+ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData")) %>%
   dplyr::filter(year == yy)
 ap_nuts3 <- ap %>%
   dplyr::filter(
@@ -44,7 +44,7 @@ ap_nuts3 <- ap %>%
   )
 ap_nuts3_sf <- sf::st_sf(ap_nuts3, geometry = ap_nuts3$geometry)
 
-deaths <- get(load(paste0("data/rfasst_output/tmp_m3_get_mort_pm25.output.RData"))) %>%
+deaths <- get(load(paste0("data/rfasst_output/necp_m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
   dplyr::filter(year == yy)
 if (normalized) {
@@ -171,7 +171,8 @@ if(nrow(harm_data_repair) != 0) {
   stop('There is a mismatch between NUTS3 and ISO3 codes. Check the `merged_output_2019_wID_clean.shp` dataset.')
 }
 
-harm_data_sf <- data.table::as.data.table(harm_data_repair) %>%
+harm_data_sf <- data.table::as.data.table(harm_data) %>%
+  dplyr::select(-geometry) %>% 
   dplyr::left_join(
     nuts3_plot_data %>%
       dplyr::select(geo, geometry),
@@ -181,7 +182,7 @@ harm_data_sf <- sf::st_sf(harm_data_sf, geometry = harm_data_sf$geometry)
 sf::st_write(harm_data_sf, "data/tmp/harm_data_sf.shp", append = FALSE)
 
 # ==============================================================================
-#                              COMPUTE INDICATORS                              #
+#                                 PLOT INDICATORS                              #
 # ==============================================================================
 
 #### GDP =======================================================================
@@ -247,6 +248,7 @@ harm_data_nuts3_sf <- harm_data_nuts3 %>%
   )
 harm_data_nuts3_sf <- sf::st_sf(harm_data_nuts3_sf, geometry = harm_data_nuts3_sf$geometry)
 
+harm_data_nuts3_sf <- get(load('harm_data_nuts3_sf.RData'))
 
 plot_income <- tm_shape(nuts3_plot_data,
   projection = "EPSG:3035",
@@ -443,7 +445,7 @@ harm_socioeconomic_nuts_sf <- data.table::as.data.table(urbn_type) %>%
   )
 harm_socioeconomic_nuts_sf <- sf::st_sf(harm_socioeconomic_nuts_sf, geometry = harm_socioeconomic_nuts_sf$geometry)
 
-sf::st_write(harm_socioeconomic_nuts_sf, "data/tmp/harm_socioeconomic_nuts_sf_newdeaths.shp", append = FALSE)
+sf::st_write(harm_socioeconomic_nuts_sf, "data/tmp/harm_socioeconomic_nuts_sf_newdeaths_NECP.gpkg", append = FALSE)
 
 
 

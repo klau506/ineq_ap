@@ -11,6 +11,7 @@ library(ggpattern)
 library(ggplot2)
 library(tmap)
 library(magrittr)
+library(ggpubr)
 
 # helper scripts
 source("R/utils.R")
@@ -573,7 +574,8 @@ ggsave(
 )
 ggsave(
   file = paste0("figures/plot_ap_urbn_type.png"), height = 10, width = 18, units = "cm",
-  plot = plot_ap_urbn_type + theme(legend.position = 'none'), dpi = 300
+  plot = plot_ap_urbn_type + theme(legend.position = 'none',
+                                   panel.border = element_blank()), dpi = 300
 )
 leg = ggpubr::get_legend(plot_ap_urbn_type + theme(
   legend.direction = 'horizontal',
@@ -742,81 +744,29 @@ ap_geo_gini <- unique(ap_geo_gini) %>%
                 c95 = quantile(ap, 0.95)) %>% 
   dplyr::ungroup()
 
-plot_ap_gini <- ggplot(ap_geo_gini) +
-  geom_density(mapping = aes(x = ap,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               size = 0.8) +
-  geom_jitter(mapping = aes(x = ap,
-                            y = -as.numeric(quintile) * spacing_factor * 1e-1,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 0.02) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
-                ymax = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Gini quintiles",
-    labels = quintiles.labs.gini.nuts3
-  ) +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Gini quintiles",
-    labels = quintiles.labs.gini.nuts3
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "PM2.5 concentration [ug/m3]", 
-       y = "",
-       color = "Gini quintiles") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
-
+plot_ap_gini <- prob_jitter_plot(ap_geo_gini %>% 
+                                   dplyr::rename(item = ap), 
+                                 legend_title = 'Gini quintiles', 
+                                 legend_type = 'quintiles',
+                                 ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
   file = paste0("figures/plot_ap_gini.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_ap_gini
 )
+ggsave(
+  file = paste0("figures/plot_ap_gini.png"), height = 10, width = 18, units = "cm",
+  plot = plot_ap_gini + theme(legend.position = 'none'), dpi = 300
+)
+
+leg = ggpubr::get_legend(plot_ap_gini + theme(
+  legend.direction = 'horizontal',
+  legend.position = 'bottom',
+  legend.key.size = unit(1, "cm"),
+  legend.title = element_text(size = legend.text.size+5),
+  legend.text = element_text(size = legend.text.size+5))
+)
+save(leg, file = paste0("figures/legend_gini.RData"))
+
 
 ap_geo_gini %>%
   dplyr::group_by(quintile) %>%
@@ -851,82 +801,30 @@ ap_geo_per_elderly <- unique(ap_geo_per_elderly) %>%
                 c66 = quantile(ap, 0.66),
                 c95 = quantile(ap, 0.95)) %>% 
   dplyr::ungroup()
-spacing_factor = 0.5
-plot_ap_per_elderly <- ggplot(ap_geo_per_elderly) +
-  geom_density(mapping = aes(x = ap,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               size = 0.8) +
-  geom_jitter(mapping = aes(x = ap,
-                            y = -as.numeric(quintile) * spacing_factor * 1e-1,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 0.02) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
-                ymax = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 + 1e-3 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 - 1e-3 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Elderly proportion quintiles",
-    labels = quintiles.labs.per_elderly.nuts3
-  ) +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Elderly proportion quintiles",
-    labels = quintiles.labs.per_elderly.nuts3
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "PM2.5 concentration [ug/m3]", 
-       y = "",
-       color = "Elderly proportion quintiles") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
 
+
+plot_ap_per_elderly <- prob_jitter_plot(ap_geo_per_elderly %>% 
+                                   dplyr::rename(item = ap), 
+                                 legend_title = 'Elderly proportion\nquintiles', 
+                                 legend_type = 'quintiles',
+                                 ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
   file = paste0("figures/plot_ap_per_elderly.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_ap_per_elderly
 )
+ggsave(
+  file = paste0("figures/plot_ap_per_elderly.png"), height = 10, width = 18, units = "cm",
+  plot = plot_ap_per_elderly + theme(legend.position = 'none'), dpi = 300
+)
+
+leg = ggpubr::get_legend(plot_ap_per_elderly + theme(
+  legend.direction = 'horizontal',
+  legend.position = 'bottom',
+  legend.key.size = unit(1, "cm"),
+  legend.title = element_text(size = legend.text.size+5),
+  legend.text = element_text(size = legend.text.size+5))
+)
+save(leg, file = paste0("figures/legend_per_elderly.RData"))
 
 ap_geo_per_elderly %>%
   dplyr::group_by(quintile) %>%
@@ -1073,81 +971,21 @@ deaths_geo_gini <- unique(deaths_geo_gini) %>%
                 c95 = quantile(deaths, 0.95)) %>% 
   dplyr::ungroup()
 
-plot_deaths_gini <- ggplot(deaths_geo_gini) +
-  geom_density(mapping = aes(x = deaths,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               size = 0.8) +
-  geom_jitter(mapping = aes(x = deaths,
-                            y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 0.0004) + 
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + 2e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - 2e-5 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + 2e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - 2e-5 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + 2e-5 * scl,
-                ymax = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - 2e-5 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + 2e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - 2e-5 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Gini quintiles",
-    labels = quintiles.labs.gini.nuts3
-  ) +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "Gini quintiles",
-    labels = quintiles.labs.gini.nuts3
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "Premature deaths [Deaths per 1M inhabitants]",
-       y = "",
-       color = "Gini quintiles") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
 
+plot_deaths_gini <- prob_jitter_plot(deaths_geo_gini %>% 
+                                          dplyr::rename(item = deaths), 
+                                        legend_title = 'Gini quintiles', 
+                                        legend_type = 'quintiles',
+                                        ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
 ggsave(
   file = paste0("figures/plot_deaths_gini.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_deaths_gini
 )
+ggsave(
+  file = paste0("figures/plot_deaths_gini.png"), height = 10, width = 18, units = "cm",
+  plot = plot_deaths_gini + theme(legend.position = 'none'), dpi = 300
+)
+
 
 deaths_geo_gini %>%
   dplyr::group_by(quintile) %>%
@@ -1234,80 +1072,19 @@ deaths_geo_per_elderly <- unique(deaths_geo_per_elderly) %>%
                 c95 = quantile(deaths, 0.95)) %>% 
   dplyr::ungroup()
 
-plot_deaths_per_elderly <- ggplot(deaths_geo_per_elderly) +
-  geom_density(mapping = aes(x = deaths,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               size = 0.8) +
-  geom_jitter(mapping = aes(x = deaths,
-                            y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 0.0006) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035 + 3e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035 - 3e-5 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035 + 3e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035 - 3e-5 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035 + 3e-5 * scl,
-                ymax = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035 - 3e-5 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035 + 3e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.035 - 3e-5 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "per_elderly quintiles",
-    labels = quintiles.labs.per_elderly.nuts3
-  ) +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "per_elderly quintiles",
-    labels = quintiles.labs.per_elderly.nuts3
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "Premature deaths [Deaths per 1M inhabitants]",
-       y = "",
-       color = "per_elderly quintiles") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
 
+plot_deaths_per_elderly <- prob_jitter_plot(deaths_geo_per_elderly %>% 
+                                       dplyr::rename(item = deaths), 
+                                     legend_title = 'Elderly proportion\nquintiles', 
+                                     legend_type = 'quintiles',
+                                     ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
 ggsave(
   file = paste0("figures/plot_deaths_per_elderly.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_deaths_per_elderly
+)
+ggsave(
+  file = paste0("figures/plot_deaths_per_elderly.png"), height = 10, width = 18, units = "cm",
+  plot = plot_deaths_per_elderly + theme(legend.position = 'none'), dpi = 300
 )
 
 deaths_geo_per_elderly %>%
@@ -1634,81 +1411,18 @@ ap_grid_per_elderly <- unique(df_ap_eld_no0) %>%
 ap_grid_per_elderly_sample <- ap_grid_per_elderly %>% 
   dplyr::slice_sample(n = 10000)
 
-
-plot_ap_per_elderly <- ggplot(ap_grid_per_elderly_sample) +
-  geom_density(mapping = aes(x = ap,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               linewidth = 0.8) +
-  geom_jitter(mapping = aes(x = ap,
-                            y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 0.015) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
-                ymax = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "per_elderly quintiles",
-    labels = quintiles.labs.per_elderly.grid
-  ) +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "per_elderly quintiles",
-    labels = quintiles.labs.per_elderly.grid
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "PM2.5 concentration [ug/m3]", 
-       y = "",
-       color = "per_elderly quintiles") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
-
+plot_grid_ap_per_elderly <- prob_jitter_plot(ap_grid_per_elderly_sample %>% 
+                                              dplyr::rename(item = ap), 
+                                            legend_title = 'Elderly proportion\nquintiles', 
+                                            legend_type = 'quintiles',
+                                            ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
   file = paste0("figures/plot_grid_ap_per_elderly.pdf"), height = 10, width = 18, units = "cm",
-  plot = plot_ap_per_elderly
+  plot = plot_grid_ap_per_elderly
+)
+ggsave(
+  file = paste0("figures/plot_grid_ap_per_elderly.png"), height = 10, width = 18, units = "cm",
+  plot = plot_grid_ap_per_elderly + theme(legend.position = 'none'), dpi = 300
 )
 
 ap_grid_per_elderly %>%
@@ -1958,10 +1672,11 @@ deaths_grid_income_sample <- deaths_grid_income %>%
 
 
 plot_grid_deaths_income <- prob_jitter_plot(deaths_grid_income_sample %>% 
-                                          dplyr::rename(item = deaths), 
-                                        legend_title = 'Income quintiles', 
-                                        legend_type = 'quintiles',
-                                        ox_text = 'Premature deaths [Deaths per inhabitants]')
+                                              dplyr::rename(item = deaths) %>% 
+                                              dplyr::filter(item < 0.4), 
+                                            legend_title = 'Income quintiles',
+                                            legend_type = 'quintiles',
+                                            ox_text = 'Premature deaths [Deaths per inhabitants]')
 ggsave(
   file = paste0("figures/plot_grid_deaths_income.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_income
@@ -2047,11 +1762,11 @@ ggsave(
 ## GRID - Deaths vs ELDERLY ----------------------------------------------------
 # data processing --------------------------------------------------------------
 pop_ge652 <- terra::project(pop_ge65, pm.mort_raster2)
-pop_ge652 <- resample(pop_ge652, pm.mort_raster2)
+pop_ge652 <- terra::resample(pop_ge652, pm.mort_raster2)
 pop_ge652 <- terra::crop(pop_ge652, extent_raster)
 
 pop_t2 <- terra::project(pop_t, pm.mort_raster2)
-pop_t2 <- resample(pop_t2, pm.mort_raster2)
+pop_t2 <- terra::resample(pop_t2, pm.mort_raster2)
 pop_t2 <- terra::crop(pop_t2, extent_raster)
 
 pop_elderly <- pop_ge652/pop_t2
@@ -2096,83 +1811,21 @@ deaths_grid_per_elderly <- unique(df_mort_eld_no0) %>%
 deaths_grid_per_elderly_sample <- deaths_grid_per_elderly %>% 
   dplyr::slice_sample(n = 10000)
 
-scl = 7000
-plot_deaths_per_elderly <- ggplot(deaths_grid_per_elderly_sample %>% 
-                                    dplyr::filter(deaths < 0.15)) +
-  geom_density(mapping = aes(x = deaths,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               linewidth = 0.8) +
-  geom_jitter(mapping = aes(x = deaths,
-                            y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 3.5) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
-                ymax = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 + 8e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.04 - 8e-4 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "per_elderly quintiles",
-    labels = quintiles.labs.per_elderly.grid
-  ) +
-  scale_fill_manual(
-    values = quintiles.color,
-    name = "per_elderly quintiles",
-    labels = quintiles.labs.per_elderly.grid
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "PM2.5 concentration [ug/m3]", 
-       y = "",
-       color = "per_elderly quintiles") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
-
+plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample %>% 
+                                                   dplyr::rename(item = deaths) %>% 
+                                                 dplyr::filter(item < 0.5), 
+                                                 legend_title = 'Elderly proportion\nquintiles', 
+                                                 legend_type = 'quintiles',
+                                                 ox_text = 'Premature Deaths [Deaths per inhabitants]')
 ggsave(
   file = paste0("figures/plot_grid_deaths_per_elderly.pdf"), height = 10, width = 18, units = "cm",
-  plot = plot_deaths_per_elderly
+  plot = plot_grid_deaths_per_elderly
 )
+ggsave(
+  file = paste0("figures/plot_grid_deaths_per_elderly.png"), height = 10, width = 18, units = "cm",
+  plot = plot_grid_deaths_per_elderly + theme(legend.position = 'none'), dpi = 300
+)
+
 
 deaths_grid_per_elderly %>%
   dplyr::group_by(quintile) %>%
@@ -2252,20 +1905,20 @@ ggsave(
 
 # URBN TYPE
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_urbn_type.png")), 
-                      top = textGrob("a)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_urbn.png")), 
-                      top = textGrob("b)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_urbn_type.png")), 
-                      top = textGrob("c)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+                      top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_urbn.png")), 
-                      top = textGrob("d)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+                      top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
-pl <- grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
+pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_urbn_type.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
 
 pl <- gridExtra::arrangeGrob(
   pl, legend_centered, ncol = 1,
-  heights = unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
+  heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
 )
 
 ggsave(file=file.path(paste0('figures/plot_combined_URBNTYPE.pdf')), 
@@ -2274,21 +1927,63 @@ ggsave(file=file.path(paste0('figures/plot_combined_URBNTYPE.pdf')),
 
 # INCOME
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_income.png")), 
-                      top = textGrob("a)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_income.png")), 
-                      top = textGrob("b)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_income.png")), 
-                      top = textGrob("c)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+                      top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_income.png")), 
-                      top = textGrob("d)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+                      top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
-pl <- grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
+pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_income.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
 
 pl <- gridExtra::arrangeGrob(
   pl, legend_centered, ncol = 1,
-  heights = unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
+  heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
   )
 
 ggsave(file=file.path(paste0('figures/plot_combined_INCOME.pdf')), 
        plot = pl, height = 12, width = 18)
+
+
+# ELDERLY
+grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_per_elderly.png")), 
+                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_per_elderly.png")), 
+                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_per_elderly.png")), 
+                      top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_per_elderly.png")), 
+                      top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+
+pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
+legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+
+pl <- gridExtra::arrangeGrob(
+  pl, legend_centered, ncol = 1,
+  heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
+  )
+
+ggsave(file=file.path(paste0('figures/plot_combined_ELDERLY.pdf')), 
+       plot = pl, height = 12, width = 18)
+
+# GINI
+grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_gini.png")), 
+                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_gini.png")), 
+                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+
+pl <- gridExtra::grid.arrange(grob_a, grob_b, ncol = 2)
+legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_gini.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+
+pl <- gridExtra::arrangeGrob(
+  pl, legend_centered, ncol = 1,
+  heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
+  )
+
+ggsave(file=file.path(paste0('figures/plot_combined_GINI.pdf')), 
+       plot = pl, height = 6, width = 18)
+
+
+

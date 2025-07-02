@@ -1,3 +1,100 @@
+
+
+prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title = '', 
+                             legend_type = NULL, ox_text = '') {
+  # Find the maximum y value
+  pl <- ggplot(data) +
+    geom_density(mapping = aes(x = item, fill = quintile, color = quintile),
+                 inherit.aes = FALSE,
+                 alpha = 0.1,
+                 linewidth = 0.8)
+  plot_data <- ggplot_build(pl)$data[[1]]
+  max_density <- max(plot_data$y)
+  
+  # Do the plot
+  spacing_factor = max_density*77
+  scl = max_density/17
+  
+  
+  legend_color = paste0(legend_type, '.color')
+  legend_labs = paste0(legend_type, '.labs')
+  
+  pl <- ggplot(data) +
+    geom_density(mapping = aes(x = item,
+                               fill = quintile,
+                               color = quintile),
+                 inherit.aes = FALSE,
+                 alpha = 0.1,
+                 linewidth = 0.8) +
+    geom_jitter(mapping = aes(x = item,
+                              y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
+                              color = quintile),
+                size = 0.5,
+                alpha = 0.5,
+                height = max_density/14) +
+    geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + scl,
+                     yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - scl,
+                     x = c05, xend = c05, color = quintile),
+                 linewidth = 0.8) +
+    geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + scl,
+                     yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - scl,
+                     x = c95, xend = c95, color = quintile),
+                 linewidth = 0.8) +
+    geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
+                     yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
+                     x = c05, xend = c33, color = quintile),
+                 linewidth = 0.8) +
+    geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
+                     yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
+                     x = c66, xend = c95, color = quintile),
+                 linewidth = 0.8) +
+    geom_rect(aes(ymin = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + scl,
+                  ymax = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - scl,
+                  xmin = c33, xmax = c66,
+                  color = quintile),
+              fill = "white", alpha = 0.01, linewidth = 0.8) +
+    geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + scl,
+                     yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - scl,
+                     x = c50, xend = c50,
+                     color = quintile),
+                 linewidth = 0.8) +
+    scale_color_manual(
+      values = get(legend_color),
+      name = legend_title,
+      labels = get(legend_labs)
+    ) +
+    scale_fill_manual(
+      values = get(legend_color),
+      name = legend_title,
+      labels = get(legend_labs)
+    ) +
+    guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+    theme_minimal() +
+    labs(x = ox_text,
+         y = "",
+         color = legend_title) +
+    theme(
+      panel.background = element_rect(fill = "white", color = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = legend.text.size),
+      strip.background = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text = element_text(size = legend.text.size),
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.line.y = element_blank(),
+      legend.key.size = unit(0.6, "cm"),
+      legend.title = element_text(size = legend.text.size),
+      legend.text = element_text(size = legend.text.size),
+      legend.position = legend_position
+    )
+  
+  return(pl)
+}
+
+
+
 urbn_type.color = c('City'='#C288B0',
                     'Town/Suburb'='#C3D2D5',
                     'Rural'='#92DEC3')

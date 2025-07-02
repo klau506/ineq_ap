@@ -185,6 +185,20 @@ ggsave(plot_ap_gg,
        filename = paste0("figures/plot_ap.pdf"),
        width = 11, height = 10, units = "cm")
 
+# Ranking ctries PM2.5 concentration
+dat_rank = ap_nuts3_sf %>% 
+  as.data.frame() %>% 
+  dplyr::group_by(CNTR_CODE, year) %>% 
+  dplyr::summarise(mean_ap = mean(ap)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(mean_ap)
+print(tail(dat_rank))
+ # MT        2030    10.4 
+ # NL        2030    10.5 
+ # CH        2030    10.9 
+ # BE        2030    11.4 
+ # TR        2030    11.6 
+ # IT        2030    12.9
 
 
 ## GRID - AP  -------------------------------------------------------------------------
@@ -261,6 +275,21 @@ ggsave(plot_deaths_gg,
        filename = paste0("figures/plot_deaths", normalized_tag, ".pdf"),
        width = 14, height = 10, units = "cm")
 
+# Ranking ctries PM2.5 mortalities
+dat_rank = deaths_nuts3_sf %>% 
+  as.data.frame() %>% 
+  dplyr::group_by(CNTR_CODE, year) %>% 
+  dplyr::summarise(mean_deaths = mean(deaths, na.rm = T)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(mean_deaths)
+print(tail(dat_rank))
+#  CNTR_CODE  year mean_deaths
+#  HR         2030        375.
+#  ME         2030        405.
+#  HU         2030        460.
+#  MK         2030        475.
+#  RS         2030        498.
+#  BG         2030        551.
 
 
 ## GRID - DEATHS  -------------------------------------------------------------------------
@@ -268,7 +297,6 @@ pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_EU_NECP_LTT.RDat
 pm.mort_raster2 <- terra::setValues(pm.pre, pm.mort_raster[['total']])
 pm.mort_raster2 <- terra::crop(pm.mort_raster2, extent_raster)
 
-eu_mask_raster <- raster::raster(eu_mask)
 eu_mask_raster <- terra::rast(terra::ext(eu_mask), resolution = 0.01)  # or define your own resolution
 eu_mask_raster2 <- terra::rasterize(eu_mask, eu_mask_raster, field = "iso_n3")
 eu_mask_raster2 <- terra::crop(eu_mask_raster2, extent_raster)
@@ -286,7 +314,7 @@ base_r <- raster::raster(eu_mask_raster2)
 colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
 par(mar = c(0, 0, 0, 0))
 raster::plot(base_r,
-             col = gray_col,
+             col = 'gray90',
              legend = FALSE,
              axes = FALSE,
              box = FALSE,
@@ -374,6 +402,21 @@ ggsave(plot_ap_gg,
        filename = paste0("figures/plot_ctry_ap.pdf"),
        width = 11, height = 10, units = "cm")
 
+# Ranking ctries PM2.5 concentration
+dat_rank = ap_ctry_sf %>% 
+  as.data.frame() %>% 
+  dplyr::group_by(ISO3, year) %>% 
+  dplyr::summarise(mean_ap = mean(ap, na.rm = T)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(mean_ap)
+print(tail(dat_rank))
+# ISO3  year  mean_ap
+# NLD   2030     10.2
+# HUN   2030     10.2
+# LUX   2030     10.3
+# BEL   2030     10.9
+# CHE   2030     11.0
+# ITA   2030     12.5
 
 
 ## AP CTRY LIMIT WHO -------------------------------------------------------------------------
@@ -441,7 +484,9 @@ ggsave(plot = plot_ap_gg,
        filename = paste0("figures/plot_ctry_limit_ap.png"),
        width = 11, height = 10, units = "cm")
 
-
+# Print ctries over WHO guidelines
+print(ap_ctry_sf %>% dplyr::filter(overWHO) %>% dplyr::pull(ISO3) %>% unique())
+print(ap_ctry_sf %>% dplyr::filter(!overWHO) %>% dplyr::pull(ISO3) %>% unique())
 
 ## DEATHS CTRY ----------------------------------------------------------------------
 deaths_ctryy <- deaths_ctry %>%
@@ -504,62 +549,31 @@ ggsave(plot_deaths_gg,
 
 
 ## AP vs urbn_type -------------------------------------------------------------
-ap_urbntype_sf <- ap_socioecon_sf %>%
-  dplyr::filter(rowSums(is.na(.)) == 0) %>%
-  dplyr::select(geo, urbn_type, ap, geometry) %>% 
-  unique()
+ap_geo_urbn_type <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(geo, urbn_type, ap)
+ap_geo_urbn_type <- unique(ap_geo_urbn_type) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>% 
+  dplyr::mutate(quintile = urbn_type) %>% 
+  dplyr::group_by(quintile) %>% 
+  dplyr::mutate(c05 = quantile(ap, 0.05),
+                c33 = quantile(ap, 0.33),
+                c50 = quantile(ap, 0.50),
+                c66 = quantile(ap, 0.66),
+                c95 = quantile(ap, 0.95)) %>% 
+  dplyr::ungroup()
 
-df <- data.table::as.data.table(ap_urbntype_sf) %>%
-  dplyr::select(-geometry)
-df_medi <- df[, .(medi = quantile(ap, 0.5, na.rm = T)),
-              by = c("urbn_type")
-]
-
-plot_urbntype_density <- ggplot(df) +
-  geom_density(
-    data = df, aes(
-      x = ap, group = urbn_type,
-      color = urbn_type, fill = urbn_type
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = urbn_type, xintercept = medi),
-             data = df_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ urbn_type, nrow = 3) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  scale_color_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title = element_text(size = legend.text.size),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks = element_blank(),
-    axis.line = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = "None"
-  )
-
+plot_ap_urbn_type <- prob_jitter_plot(ap_geo_urbn_type %>% 
+                                        dplyr::rename(item = ap), 
+                                      legend_title = 'Urban type', 
+                                      legend_type = 'urbn_type',
+                                      ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
-  file = paste0("figures/plot_urbntype_density_ap.pdf"), height = 12, width = 18, units = "cm",
-  plot = plot_urbntype_density
+  file = paste0("figures/plot_ap_urbn_type.pdf"), height = 10, width = 18, units = "cm",
+  plot = plot_ap_urbn_type
+)
+ggsave(
+  file = paste0("figures/plot_ap_urbn_type.png"), height = 10, width = 18, units = "cm",
+  plot = plot_ap_urbn_type + theme(legend.position = 'none'), dpi = 300
 )
 
 
@@ -1041,6 +1055,8 @@ ggsave(
 
 
 ## Deaths vs urbn_type2 -------------------------------------------------------------
+spacing_factor = 0.5; scl = 25
+
 deaths_geo_urbn_type <- data.table::as.data.table(deaths_socioecon_sf) %>%
   dplyr::select(geo, urbn_type, deaths)
 deaths_geo_urbn_type <- unique(deaths_geo_urbn_type) %>% 
@@ -1054,80 +1070,19 @@ deaths_geo_urbn_type <- unique(deaths_geo_urbn_type) %>%
                 c95 = quantile(deaths, 0.95)) %>% 
   dplyr::ungroup()
 
-plot_deaths_urbn_type <- ggplot(deaths_geo_urbn_type) +
-  geom_density(mapping = aes(x = deaths,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               size = 0.8) +
-  geom_jitter(mapping = aes(x = deaths,
-                            y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 0.0005) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + 2.5e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - 2.5e-5 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + 2.5e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - 2.5e-5 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + 2.5e-5 * scl,
-                ymax = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - 2.5e-5 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + 2.5e-5 * scl,
-                   yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - 2.5e-5 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  scale_fill_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "Premature deaths [Deaths per 1M inhabitants]",
-       y = "",
-       color = "Urban type") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
 
+plot_deaths_urbn_type <- prob_jitter_plot(deaths_geo_urbn_type %>% 
+                                            dplyr::rename(item = deaths), 
+                                          legend_title = 'Urban type', 
+                                          legend_type = 'urbn_type',
+                                          ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
 ggsave(
   file = paste0("figures/plot_deaths_urbn_type.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_deaths_urbn_type
+)
+ggsave(
+  file = paste0("figures/plot_deaths_urbn_type.png"), height = 10, width = 18, units = "cm",
+  plot = plot_deaths_urbn_type + theme(legend.position = 'none'), dpi = 300
 )
 
 deaths_geo_urbn_type %>%
@@ -1530,83 +1485,25 @@ ap_grid_urbn <- unique(df_ap_urbn_no0) %>%
   dplyr::ungroup() # 5541267 datapoints
 ap_grid_urbn_sample <- ap_grid_urbn %>% 
   dplyr::slice_sample(n = 10000) %>% 
-  dplyr::mutate(quintile = forcats::fct_relevel(quintile, '3','2','1'))
+  dplyr::mutate(quintile = dplyr::if_else(quintile == 1, 'Rural',
+                                          dplyr::if_else(quintile == 2, 'Town/Suburb',
+                                                         dplyr::if_else(quintile == 3, 'City', NA)))) %>% 
+  dplyr::mutate(quintile = forcats::fct_relevel(quintile, 'City','Town/Suburb','Rural'))
 
 # plots  -----------------------------------------------------------------------
-plot_ap_urbn <- ggplot(ap_grid_urbn_sample) +
-  geom_density(mapping = aes(x = ap,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               linewidth = 0.8) +
-  geom_jitter(mapping = aes(x = ap,
-                            y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 0.008) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
-                ymax = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = urbn_type.color.num,
-    name = "Urban type",
-    labels = urbn_type.labs.num
-  ) +
-  scale_fill_manual(
-    values = urbn_type.color.num,
-    name = "Urban type",
-    labels = urbn_type.labs.num
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "PM2.5 concentration [ug/m3]", 
-       y = "",
-       color = "Urban type") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
+plot_grid_ap_urbn <- prob_jitter_plot(data = ap_grid_urbn_sample %>% 
+                                        dplyr::rename(item = ap), 
+                                      legend_title = 'Urban type', 
+                                      legend_type = 'urbn_type',
+                                      ox_text = 'PM2.5 concentration [ug/m3]')
 
 ggsave(
   file = paste0("figures/plot_grid_ap_urbn.pdf"), height = 10, width = 18, units = "cm",
-  plot = plot_ap_urbn
+  plot = plot_grid_ap_urbn
+)
+ggsave(
+  file = paste0("figures/plot_grid_ap_urbn.png"), height = 10, width = 18, units = "cm",
+  plot = plot_grid_ap_urbn + theme(legend.position = 'none'), dpi = 300
 )
 
 df <- data.table::as.data.table(ap_grid_urbn_sample) %>% 
@@ -1615,6 +1512,7 @@ df <- data.table::as.data.table(ap_grid_urbn_sample) %>%
 df_medi <- df[, .(medi = quantile(ap, 0.5, na.rm = T)),
               by = c("urbn_type")
 ]
+
 
 plot_urbntype_density <- ggplot(df) +
   geom_density(
@@ -2111,85 +2009,25 @@ deaths_grid_urbn <- unique(df_mort_urbn_no0) %>%
   dplyr::ungroup() # 5541267 datapoints
 deaths_grid_urbn_sample <- deaths_grid_urbn %>% 
   dplyr::slice_sample(n = 10000) %>% 
-  dplyr::mutate(quintile = forcats::fct_relevel(quintile, '3','2','1'))
+  dplyr::mutate(quintile = dplyr::if_else(quintile == 1, 'Rural',
+                                          dplyr::if_else(quintile == 2, 'Town/Suburb',
+                                                         dplyr::if_else(quintile == 3, 'City', NA)))) %>% 
+  dplyr::mutate(quintile = forcats::fct_relevel(quintile, 'City','Town/Suburb','Rural'))
 
-scl = 400
-plot_deaths_urbn <- ggplot(deaths_grid_urbn_sample %>% 
-                             dplyr::filter(deaths < 5)) +
-  geom_density(mapping = aes(x = deaths,
-                             fill = quintile,
-                             color = quintile),
-               inherit.aes = FALSE,
-               alpha = 0.1,
-               linewidth = 0.8) +
-  ylim(-1.5,2.25) +
-  geom_jitter(mapping = aes(x = deaths,
-                            y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                            color = quintile),
-              size = 0.5,
-              alpha = 0.5,
-              height = 0.15) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
-                   x = c05, xend = c05, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
-                   x = c95, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                   x = c05, xend = c33, color = quintile),
-               size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02,
-                   x = c66, xend = c95, color = quintile),
-               size = 0.8) +
-  geom_rect(aes(ymin = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
-                ymax = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
-                xmin = c33, xmax = c66,
-                color = quintile),
-            fill = "white", alpha = 0.01, size = 0.8) +
-  geom_segment(aes(y = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 + 4e-4 * scl,
-                   yend = -as.numeric(quintile) * scl * spacing_factor * 1e-1 * 0.02 - 4e-4 * scl,
-                   x = c50, xend = c50,
-                   color = quintile),
-               size = 0.8) +
-  scale_color_manual(
-    values = urbn_type.color.num,
-    name = "Urban type",
-    labels = urbn_type.labs.num
-  ) +
-  scale_fill_manual(
-    values = urbn_type.color.num,
-    name = "Urban type",
-    labels = urbn_type.labs.num
-  ) +
-  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-  theme_minimal() +
-  labs(x = "Premature deaths [Deaths per inhabitants]", 
-       y = "",
-       color = "Urban type") +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.y = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = c(0.87,0.87)
-  )
-
+plot_grid_deaths_urbn <- prob_jitter_plot(deaths_grid_urbn_sample %>% 
+                                            dplyr::rename(item = deaths) %>% 
+                                            dplyr::filter(item < 4), 
+                                          legend_title = 'Urban type',
+                                          legend_type = 'urbn_type',
+                                          ox_text = 'Premature deaths [Deaths per inhabitants]')
 ggsave(
   file = paste0("figures/plot_grid_deaths_urbn.pdf"), height = 10, width = 18, units = "cm",
-  plot = plot_deaths_urbn,
+  plot = plot_grid_deaths_urbn,
+  bg = 'white'
+)
+ggsave(
+  file = paste0("figures/plot_grid_deaths_urbn.png"), height = 10, width = 18, units = "cm",
+  plot = plot_grid_deaths_urbn + theme(legend.position = 'none'), dpi = 300,
   bg = 'white'
 )
 
@@ -2638,3 +2476,21 @@ ggsave(
   plot = plot_eld_density
 )
 
+
+
+
+## COMBINED PLOTS --------------------------------------------------------------
+
+# URBN TYPE
+grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_urbn_type.png")), 
+                      top = textGrob("a)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_urbn.png")), 
+                      top = textGrob("b)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_urbn_type.png")), 
+                      top = textGrob("c)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_urbn.png")), 
+                      top = textGrob("d)", x = unit(0, "npc"), just = "left", gp = gpar(fontface = "bold", cex = 1)))
+
+pl <- grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
+ggsave(file=file.path(paste0('figures/plot_combined_URBNTYPE.pdf')), 
+       plot = pl, height = 12, width = 18)

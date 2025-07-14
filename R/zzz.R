@@ -30,7 +30,7 @@ prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title 
                               y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
                               color = quintile),
                 size = 0.5,
-                alpha = 0.5,
+                alpha = 0.3,
                 height = max_density/14) +
     geom_segment(aes(y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 + scl,
                      yend = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025 - scl,
@@ -89,6 +89,22 @@ prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title 
       legend.text = element_text(size = legend.text.size),
       legend.position = legend_position
     )
+  
+  if (legend_type == 'urbn_type') {
+    pl2 <- pl +
+      geom_text(mapping = aes(x = max(c95) + (max(item) - max(c95))*3/4, 
+                              y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
+                              color = quintile, label = quintile))
+  } else {
+    pl2 <- pl +
+      geom_text(mapping = aes(x = max(c95) + (max(item) - max(c95))*3/4, 
+                              y = -as.numeric(quintile) * spacing_factor * 1e-1 * 0.025,
+                              color = quintile, label = paste0('Q',quintile)))
+  }
+  
+  pl1 <- pl
+  
+  pl <- list(pl1, pl2)
   
   return(pl)
 }

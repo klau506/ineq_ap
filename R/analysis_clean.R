@@ -2500,7 +2500,7 @@ data <- ap_elderly_medi %>%
   dplyr::rename(country = ctry) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
 
-ml_do_all(data, 3, 'withinCtry/ml_elderly_nuts3',
+ml_do_all(data, 3, 'withinCtry/ml_elderly_grid',
           fig_legend = "Elderly\nproportion\nquintile",
           fig_ox_label = "PM2.5 concentration [ug/m3]", type = 'ap')  
 
@@ -2593,7 +2593,7 @@ data <- deaths_income_medi %>%
   dplyr::rename(country = ctry) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
 
-ml_do_all(data, 8, 'withinCtry/ml_income_nuts3',
+ml_do_all(data, 8, 'withinCtry/ml_income_grid',
           fig_legend = "Income\nper capita\nquintile",
           fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
           fix = T, type = 'deaths')
@@ -2618,7 +2618,7 @@ data <- deaths_elderly_medi %>%
   dplyr::rename(country = ctry) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
 
-ml_do_all(data, 3, 'withinCtry/ml_elderly_nuts3',
+ml_do_all(data, 3, 'withinCtry/ml_elderly_grid',
           fig_legend = "Elderly\nproportion\nquintile",
           fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
           type = 'deaths')
@@ -2643,7 +2643,7 @@ data <- deaths_gini_medi %>%
   dplyr::rename(country = ctry) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
 
-ml_do_all(data, 4, 'withinCtry/ml_gini_nuts3',
+ml_do_all(data, 4, 'withinCtry/ml_gini_grid',
           fig_legend = "Gini\nindex\nquintile",type = 'deaths',
           fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]")  
 

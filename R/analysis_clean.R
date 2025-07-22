@@ -1175,7 +1175,9 @@ urbn_values <- terra::values(urbn_raster_combined_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(urbn_values)
-df_ap_urbn <- data.frame(pm_concentration = pm_values[valid_idx], urbn_type = urbn_values[valid_idx])
+df_ap_urbn <- data.frame(pm_concentration = pm_values[valid_idx],
+                         urbn_type = urbn_values[valid_idx],
+                         ctry_names = ctry_values[valid_idx])
 
 df_ap_urbn_no0 <- df_ap_urbn[df_ap_urbn$pm_concentration > 0,]
 df_ap_urbn_no0 <- df_ap_urbn_no0[df_ap_urbn_no0$urbn_type > 0,]
@@ -1198,7 +1200,8 @@ ap_grid_urbn_sample <- ap_grid_urbn %>%
   dplyr::mutate(quintile = dplyr::if_else(quintile == 1, 'Rural',
                                           dplyr::if_else(quintile == 2, 'Town/Suburb',
                                                          dplyr::if_else(quintile == 3, 'City', NA)))) %>% 
-  dplyr::mutate(quintile = forcats::fct_relevel(quintile, 'City','Town/Suburb','Rural'))
+  dplyr::mutate(quintile = forcats::fct_relevel(quintile, 'City','Town/Suburb','Rural')) %>% 
+  dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
 # plots  -----------------------------------------------------------------------
 plot_grid_ap_urbn <- prob_jitter_plot(data = ap_grid_urbn_sample %>% 
@@ -1432,7 +1435,9 @@ pop_elderly <- terra::values(elderly_raster_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(pop_elderly)
-df_ap_eld <- data.frame(pm_concentration = pm_values[valid_idx], pop_elderly_per = pop_elderly[valid_idx])
+df_ap_eld <- data.frame(pm_concentration = pm_values[valid_idx],
+                        pop_elderly_per = pop_elderly[valid_idx],
+                        ctry_names = ctry_values[valid_idx])
 
 df_ap_eld_no0 <- df_ap_eld[df_ap_eld$pm_concentration > 0,]
 df_ap_eld_no0 <- df_ap_eld_no0[df_ap_eld_no0$pop_elderly_per > 0,]
@@ -1460,7 +1465,8 @@ ap_grid_per_elderly <- unique(df_ap_eld_no0) %>%
                 c95 = quantile(ap, 0.95)) %>% 
   dplyr::ungroup() # 3519818 datapoints
 ap_grid_per_elderly_sample <- ap_grid_per_elderly %>% 
-  dplyr::slice_sample(n = 10000)
+  dplyr::slice_sample(n = 10000) %>% 
+  dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
 plot_grid_ap_per_elderly <- prob_jitter_plot(ap_grid_per_elderly_sample %>% 
                                               dplyr::rename(item = ap), 
@@ -1582,7 +1588,9 @@ urbn_values <- terra::values(urbn_raster_combined_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm.mort_values) & !is.na(urbn_values)
-df_mort_urbn <- data.frame(pm_mort = pm.mort_values[valid_idx], urbn_type = urbn_values[valid_idx])
+df_mort_urbn <- data.frame(pm_mort = pm.mort_values[valid_idx],
+                           urbn_type = urbn_values[valid_idx],
+                           ctry_names = ctry_values[valid_idx])
 
 df_mort_urbn_no0 <- df_mort_urbn[df_mort_urbn$pm_mort > 0,]
 df_mort_urbn_no0 <- df_mort_urbn_no0[df_mort_urbn_no0$urbn_type > 0,]
@@ -1612,7 +1620,8 @@ deaths_grid_urbn_sample <- deaths_grid_urbn %>%
   dplyr::mutate(quintile = dplyr::if_else(quintile == 1, 'Rural',
                                           dplyr::if_else(quintile == 2, 'Town/Suburb',
                                                          dplyr::if_else(quintile == 3, 'City', NA)))) %>% 
-  dplyr::mutate(quintile = forcats::fct_relevel(quintile, 'City','Town/Suburb','Rural'))
+  dplyr::mutate(quintile = forcats::fct_relevel(quintile, 'City','Town/Suburb','Rural')) %>% 
+  dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
 plot_grid_deaths_urbn <- prob_jitter_plot(deaths_grid_urbn_sample %>% 
                                             dplyr::rename(item = deaths) %>% 
@@ -1699,7 +1708,9 @@ inc_values <- terra::values(inc_raster_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm.mort_values) & !is.na(inc_values)
-df_mort_inc <- data.frame(pm_mort = pm.mort_values[valid_idx], inc_per_capita = inc_values[valid_idx])
+df_mort_inc <- data.frame(pm_mort = pm.mort_values[valid_idx],
+                          inc_per_capita = inc_values[valid_idx],
+                          ctry_names = ctry_values[valid_idx])
 
 df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort > 0,]
 df_mort_inc_no0 <- df_mort_inc_no0[df_mort_inc_no0$inc_per_capita > 0,]
@@ -1728,7 +1739,8 @@ deaths_grid_income <- unique(df_mort_inc_no0) %>%
                 c95 = quantile(deaths, 0.95)) %>% 
   dplyr::ungroup() # 5541267 datapoints
 deaths_grid_income_sample <- deaths_grid_income %>% 
-  dplyr::slice_sample(n = 10000)
+  dplyr::slice_sample(n = 10000) %>% 
+  dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
 
 plot_grid_deaths_income <- prob_jitter_plot(deaths_grid_income_sample %>% 
@@ -1845,7 +1857,9 @@ pop_elderly <- terra::values(elderly_raster_filtered)
 
 # Remove NA values
 valid_idx <- !is.na(pm.mort_values) & !is.na(pop_elderly)
-df_mort_eld <- data.frame(pm_mort = pm.mort_values[valid_idx], pop_elderly_per = pop_elderly[valid_idx])
+df_mort_eld <- data.frame(pm_mort = pm.mort_values[valid_idx], 
+                          pop_elderly_per = pop_elderly[valid_idx],
+                          ctry_names = ctry_values[valid_idx])
 
 df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0,]
 df_mort_eld_no0 <- df_mort_eld_no0[df_mort_eld_no0$pop_elderly_per > 0,]
@@ -1873,7 +1887,8 @@ deaths_grid_per_elderly <- unique(df_mort_eld_no0) %>%
                 c95 = quantile(deaths, 0.95)) %>% 
   dplyr::ungroup() # 3519818 datapoints
 deaths_grid_per_elderly_sample <- deaths_grid_per_elderly %>% 
-  dplyr::slice_sample(n = 10000)
+  dplyr::slice_sample(n = 10000) %>% 
+  dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
 plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample %>% 
                                                    dplyr::rename(item = deaths) %>% 
@@ -2134,4 +2149,569 @@ ggsave(file=file.path(paste0('figures/plot_combined_GINI_text.png')),
        plot = pl, height = 6, width = 18)
 
 
+
+# ==============================================================================
+#                              MACHINE LEARNING                                #
+# ==============================================================================
+source('R/machine_learning.R')
+
+## AP vs INCOME ----------------------------------------------------------------
+ap_income_medi <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(ctry, income, ap) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(income, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(ap, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- ap_income_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 8, 'withinCtry/ml_income_nuts3',
+          fig_legend = "Income\nper capita\nquintile",
+          fig_ox_label = "PM2.5 concentration [ug/m3]",type = 'ap',
+          fix = T)
+
+
+## AP vs ELDERLY --------------------------------------------------------------
+ap_elderly_medi <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(ctry, per_elderly, ap) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(per_elderly, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(ap, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- ap_elderly_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 2, 'withinCtry/ml_elderly_nuts3',
+          fig_legend = "Elderly\nproportion\nquintile",
+          fig_ox_label = "PM2.5 concentration [ug/m3]", type = 'ap')  
+
+
+## AP vs GINI ------------------------------------------------------------------
+ap_gini_medi <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(ctry, gini, ap) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(gini, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(ap, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- ap_gini_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 4, 'withinCtry/ml_gini_nuts3',
+          fig_legend = "Gini\nindex\nquintile",
+          fig_ox_label = "PM2.5 concentration [ug/m3]", type = 'ap')  
+
+
+## AP vs URBN TYPE -------------------------------------------------------------
+ap_urbntype_medi <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(ctry, urbn_type, ap) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>%
+  dplyr::group_by(urbn_type, ctry) %>% 
+  dplyr::summarise(medi = quantile(ap, 0.50)) %>% 
+  dplyr::ungroup()
+
+
+## AP - figure -----------------------------------------------------------------
+data_list <- list(
+  ap_income_medi %>%
+    dplyr::rename_with(~ "income", contains("medi")),
+  
+  ap_gini_medi %>%
+    dplyr::rename_with(~ "gini", contains("medi")),
+  
+  ap_elderly_medi %>%
+    dplyr::rename_with(~ "elderly", contains("medi"))
+)
+
+# Merge all datasets by quintile
+data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
+  dplyr::left_join(ap_urbntype_medi %>%
+                     dplyr::rename_with(~ "urbn", contains("medi")) %>% 
+                     dplyr::mutate(urbn_type = as.factor(urbn_type)),
+                   by = 'ctry'
+  ) %>% 
+  tidyr::pivot_longer(cols = c(-quintile,-urbn_type,-ctry), 
+                      names_to = "variable", values_to = "value") %>% 
+  dplyr::mutate(quintile = as.factor(quintile),
+                urbn_type = as.factor(urbn_type))
+
+# Plotting
+pl <- ggplot() +
+  geom_point(
+    data = data %>% 
+      dplyr::select(quintile, ctry, variable, value) %>% 
+      dplyr::filter(variable != 'urbn') %>% 
+      dplyr::distinct(),
+    aes(y = factor(ctry), x = value, color = quintile), size = 2, alpha = 0.85) + 
+  geom_point(
+    data = data %>% 
+      dplyr::select(urbn_type, ctry, variable, value) %>% 
+      dplyr::filter(variable == 'urbn') %>% 
+      dplyr::distinct(),
+    aes(y = factor(ctry), x = value, fill = urbn_type), shape = 21, size = 2) +
+  facet_grid(. ~ variable,
+             labeller = labeller(variable = c(income_medi = "Income\nper capita",
+                                              gini_medi = "Gini index",
+                                              elderly_medi = "Elderly\nproportion",
+                                              urbn_medi = "Urban\ntype"))) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "Quintile",
+    labels = quintiles.labs
+  ) +
+  scale_fill_manual(
+    values = urbn_type.color,
+    name = "Urban type",
+    labels = urbn_type.labs
+  ) +
+  labs(x = "PM2.5 concentration [ug/m3]", y = "") +
+  theme_minimal()
+
+ggsave(
+  file = paste0("figures/withinCtry/fig_ap_var_",yy,"_",split_num_tag,".pdf"), height = 10, width = 15, units = "cm",
+  plot = pl
+)
+
+
+
+## DEATHS vs INCOME ----------------------------------------------------------------
+deaths_income_medi <- data.table::as.data.table(deaths_socioecon_sf) %>%
+  dplyr::select(ctry, income, deaths) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(income, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- deaths_income_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 2, 'withinCtry/ml_income_nuts3',
+          fig_legend = "Income\nper capita\nquintile",
+          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
+          fix = T, type = 'deaths')
+
+
+## DEATHS vs ELDERLY --------------------------------------------------------------
+deaths_elderly_medi <- data.table::as.data.table(deaths_socioecon_sf) %>%
+  dplyr::select(ctry, per_elderly, deaths) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(per_elderly, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- deaths_elderly_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 2, 'withinCtry/ml_elderly_nuts3',
+          fig_legend = "Elderly\nproportion\nquintile",
+          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
+          type = 'deaths')
+
+## DEATHS vs GINI ------------------------------------------------------------------
+deaths_gini_medi <- data.table::as.data.table(deaths_socioecon_sf) %>%
+  dplyr::select(ctry, gini, deaths) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(gini, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- deaths_gini_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 4, 'withinCtry/ml_gini_nuts3',
+          fig_legend = "Gini\nindex\nquintile",type = 'deaths',
+          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]")  
+
+
+## DEATHS vs URBN TYPE -------------------------------------------------------------
+deaths_urbntype_medi <- data.table::as.data.table(deaths_socioecon_sf) %>%
+  dplyr::select(ctry, urbn_type, deaths) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
+  dplyr::group_by(urbn_type, ctry) %>% 
+  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
+  dplyr::ungroup()
+
+
+## DEATHS - figure -----------------------------------------------------------------
+data_list <- list(
+  deaths_income_medi %>%
+    dplyr::rename_with(~ "income", contains("medi")),
+  
+  deaths_gini_medi %>%
+    dplyr::rename_with(~ "gini", contains("medi")),
+  
+  deaths_elderly_medi %>%
+    dplyr::rename_with(~ "elderly", contains("medi"))
+)
+
+# Merge all datasets by quintile
+data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
+  dplyr::left_join(deaths_urbntype_medi %>%
+                     dplyr::rename_with(~ "urbn", contains("medi")) %>% 
+                     dplyr::mutate(urbn_type = as.factor(urbn_type)),
+                   by = 'ctry'
+  ) %>% 
+  tidyr::pivot_longer(cols = c(-quintile,-urbn_type,-ctry), 
+                      names_to = "variable", values_to = "value") %>% 
+  dplyr::mutate(quintile = as.factor(quintile),
+                urbn_type = as.factor(urbn_type))
+
+# Plotting
+pl <- ggplot() +
+  geom_point(
+    data = data %>% 
+      dplyr::select(quintile, ctry, variable, value) %>% 
+      dplyr::filter(variable != 'urbn') %>% 
+      dplyr::distinct(),
+    aes(y = factor(ctry), x = value, color = quintile), size = 2, alpha = 0.85) + 
+  geom_point(
+    data = data %>% 
+      dplyr::select(urbn_type, ctry, variable, value) %>% 
+      dplyr::filter(variable == 'urbn') %>% 
+      dplyr::distinct(),
+    aes(y = factor(ctry), x = value, fill = urbn_type), shape = 21, size = 2) +
+  facet_grid(. ~ variable,
+             labeller = labeller(variable = c(income_medi = "Income\nper capita",
+                                              gini_medi = "Gini index",
+                                              elderly_medi = "Elderly\nproportion",
+                                              urbn_medi = "Urban\ntype"))) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "Quintile",
+    labels = quintiles.labs
+  ) +
+  scale_fill_manual(
+    values = urbn_type.color,
+    name = "Urban type",
+    labels = urbn_type.labs
+  ) +
+  labs(x = "Premature Deaths [Deaths per 1M inhabitants]", y = "") +
+  theme_minimal()
+
+ggsave(
+  file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,".pdf"), height = 10, width = 15, units = "cm",
+  plot = pl
+)
+
+
+
+
+## GRID - AP vs INCOME ----------------------------------------------------------------
+ap_income_medi <- data.table::as.data.table(ap_grid_income_sample) %>%
+  dplyr::select(ctry = ctry_code, income, ap) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(income, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(ap, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- ap_income_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 7, 'withinCtry/ml_income_grid',
+          fig_legend = "Income\nper capita\nquintile",
+          fig_ox_label = "PM2.5 concentration [ug/m3]",type = 'ap',
+          fix = T)
+
+
+## GRID - AP vs ELDERLY --------------------------------------------------------------
+ap_elderly_medi <- data.table::as.data.table(ap_grid_per_elderly_sample) %>%
+  dplyr::select(ctry = ctry_code, per_elderly, ap) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(per_elderly, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(ap, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- ap_elderly_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 3, 'withinCtry/ml_elderly_nuts3',
+          fig_legend = "Elderly\nproportion\nquintile",
+          fig_ox_label = "PM2.5 concentration [ug/m3]", type = 'ap')  
+
+
+## GRID - AP vs URBN TYPE -------------------------------------------------------------
+ap_urbntype_medi <- data.table::as.data.table(ap_grid_urbn_sample) %>%
+  dplyr::select(ctry = ctry_code, urbn_type = quintile, ap) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>%
+  dplyr::group_by(urbn_type, ctry) %>% 
+  dplyr::summarise(medi = quantile(ap, 0.50)) %>% 
+  dplyr::ungroup()
+
+## GRID - AP - figure -----------------------------------------------------------------
+data_list <- list(
+  ap_income_medi %>%
+    dplyr::rename_with(~ "income", contains("medi")),
+  
+  ap_elderly_medi %>%
+    dplyr::rename_with(~ "elderly", contains("medi"))
+)
+
+# Merge all datasets by quintile
+data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
+  dplyr::left_join(ap_urbntype_medi %>%
+                     dplyr::rename_with(~ "urbn", contains("medi")) %>% 
+                     dplyr::mutate(urbn_type = as.factor(urbn_type)),
+                   by = 'ctry'
+  ) %>% 
+  tidyr::pivot_longer(cols = c(-quintile,-urbn_type,-ctry), 
+                      names_to = "variable", values_to = "value") %>% 
+  dplyr::mutate(quintile = as.factor(quintile),
+                urbn_type = as.factor(urbn_type))
+
+# Plotting
+pl <- ggplot() +
+  geom_point(
+    data = data %>% 
+      dplyr::select(quintile, ctry, variable, value) %>% 
+      dplyr::filter(variable != 'urbn') %>% 
+      dplyr::distinct(),
+    aes(y = factor(ctry), x = value, color = quintile), size = 2, alpha = 0.85) + 
+  geom_point(
+    data = data %>% 
+      dplyr::select(urbn_type, ctry, variable, value) %>% 
+      dplyr::filter(variable == 'urbn') %>% 
+      dplyr::distinct(),
+    aes(y = factor(ctry), x = value, fill = urbn_type), shape = 21, size = 2) +
+  facet_grid(. ~ variable,
+             labeller = labeller(variable = c(income_medi = "Income\nper capita",
+                                              elderly_medi = "Elderly\nproportion",
+                                              urbn_medi = "Urban\ntype"))) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "Quintile",
+    labels = quintiles.labs
+  ) +
+  scale_fill_manual(
+    values = urbn_type.color,
+    name = "Urban type",
+    labels = urbn_type.labs
+  ) +
+  labs(x = "PM2.5 concentration [ug/m3]", y = "") +
+  theme_minimal()
+
+ggsave(
+  file = paste0("figures/withinCtry/fig_ap_var_",yy,"_",split_num_tag,"_grid.pdf"), height = 10, width = 15, units = "cm",
+  plot = pl
+)
+
+
+
+## GRID - DEATHS vs INCOME ----------------------------------------------------------------
+deaths_income_medi <- data.table::as.data.table(deaths_grid_income_sample) %>%
+  dplyr::select(ctry = ctry_code, income, deaths) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(income, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- deaths_income_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 8, 'withinCtry/ml_income_nuts3',
+          fig_legend = "Income\nper capita\nquintile",
+          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
+          fix = T, type = 'deaths')
+
+## GRID - DEATHS vs ELDERLY --------------------------------------------------------------
+deaths_elderly_medi <- data.table::as.data.table(deaths_grid_per_elderly_sample) %>%
+  dplyr::select(ctry = ctry_code, per_elderly, deaths) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(per_elderly, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- deaths_elderly_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 3, 'withinCtry/ml_elderly_nuts3',
+          fig_legend = "Elderly\nproportion\nquintile",
+          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
+          type = 'deaths')
+
+## GRID - DEATHS vs GINI ------------------------------------------------------------------
+deaths_gini_medi <- data.table::as.data.table(deaths_socioecon_sf) %>%
+  dplyr::select(ctry, gini, deaths) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(gini, split_num))) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(quintile, ctry) %>% 
+  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
+  dplyr::ungroup()
+
+data <- deaths_gini_medi %>%
+  tibble::as_tibble() %>% 
+  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
+  dplyr::arrange(quintile, ctry) %>% 
+  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
+  dplyr::rename(country = ctry) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0)
+
+ml_do_all(data, 4, 'withinCtry/ml_gini_nuts3',
+          fig_legend = "Gini\nindex\nquintile",type = 'deaths',
+          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]")  
+
+
+## GRID - DEATHS vs URBN TYPE -------------------------------------------------------------
+deaths_urbntype_medi <- data.table::as.data.table(deaths_grid_urbn_sample) %>%
+  dplyr::select(ctry = ctry_code, urbn_type = quintile, deaths) %>% 
+  unique() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
+  dplyr::group_by(urbn_type, ctry) %>% 
+  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
+  dplyr::ungroup()
+
+
+## GRID - DEATHS - figure -----------------------------------------------------------------
+data_list <- list(
+  deaths_income_medi %>%
+    dplyr::rename_with(~ "income", contains("medi")),
+  
+  deaths_elderly_medi %>%
+    dplyr::rename_with(~ "elderly", contains("medi"))
+)
+
+# Merge all datasets by quintile
+data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
+  dplyr::left_join(deaths_urbntype_medi %>%
+                     dplyr::rename_with(~ "urbn", contains("medi")) %>% 
+                     dplyr::mutate(urbn_type = as.factor(urbn_type)),
+                   by = 'ctry'
+  ) %>% 
+  tidyr::pivot_longer(cols = c(-quintile,-urbn_type,-ctry), 
+                      names_to = "variable", values_to = "value") %>% 
+  dplyr::mutate(quintile = as.factor(quintile),
+                urbn_type = as.factor(urbn_type))
+
+# Plotting
+pl <- ggplot() +
+  geom_point(
+    data = data %>% 
+      dplyr::select(quintile, ctry, variable, value) %>% 
+      dplyr::filter(variable != 'urbn') %>% 
+      dplyr::distinct(),
+    aes(y = factor(ctry), x = value, color = quintile), size = 2, alpha = 0.85) + 
+  geom_point(
+    data = data %>% 
+      dplyr::select(urbn_type, ctry, variable, value) %>% 
+      dplyr::filter(variable == 'urbn') %>% 
+      dplyr::distinct(),
+    aes(y = factor(ctry), x = value, fill = urbn_type), shape = 21, size = 2) +
+  facet_grid(. ~ variable, scales = 'free',
+             labeller = labeller(variable = c(income_medi = "Income\nper capita",
+                                              elderly_medi = "Elderly\nproportion",
+                                              urbn_medi = "Urban\ntype"))) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "Quintile",
+    labels = quintiles.labs
+  ) +
+  scale_fill_manual(
+    values = urbn_type.color,
+    name = "Urban type",
+    labels = urbn_type.labs
+  ) +
+  labs(x = "Premature Deaths [Deaths per 1M inhabitants]", y = "") +
+  theme_minimal()
+
+ggsave(
+  file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,"_grid.pdf"), height = 10, width = 15, units = "cm",
+  plot = pl
+)
 

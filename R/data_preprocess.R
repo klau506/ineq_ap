@@ -14,7 +14,7 @@ normalized = T
 
 #### spacial data ==============================================================
 ## spacial data for plots
-nuts3_plot_data <- get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>%
+nuts3_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>%
   dplyr::select(-FID)
 sf::st_write(nuts3_plot_data, "data/Replication data/Global_Inputs/nuts3_plot_data.shp",
              delete_layer = TRUE,

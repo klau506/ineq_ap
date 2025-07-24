@@ -50,13 +50,26 @@ rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>%
 rfasst_ctry_pop <- rfasst::pop.all.ctry_ctry.str.SSP2 %>% 
   dplyr::select(geo = region, year, age, sex, unit, pop = value)  
 
-ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData")) %>%
-  dplyr::filter(year == yy)
+ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData")) %>% 
+  dplyr::distinct()
 
 deaths <- get(load(paste0("data/rfasst_output/necp_m3_get_mort_pm25.output.RData"))) %>%
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
-  dplyr::filter(year == yy,
-                sex == 'Both')
+  dplyr::filter(sex == 'Both')
+
+run_validation(ap, deaths %>% 
+                 dplyr::group_by(region, year, scenario) %>% 
+                 dplyr::summarise(value = sum(value),
+                                  .groups = 'drop'),
+               yy = 2022 #2019, 2020, 2022
+)
+
+ap <- ap %>% 
+  dplyr::filter(year == yy)
+
+deaths <- deaths %>% 
+  dplyr::filter(year == yy)
+
 deaths_ctry <- deaths %>%
   dplyr::filter(
     nchar(region) > 3
@@ -571,7 +584,7 @@ ap_geo_urbn_type <- unique(ap_geo_urbn_type) %>%
 
 plot_ap_urbn_type <- prob_jitter_plot(ap_geo_urbn_type %>% 
                                         dplyr::rename(item = ap), 
-                                      legend_title = 'Urban type', 
+                                      legend_title = 'Settlement type', 
                                       legend_type = 'urbn_type',
                                       ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
@@ -581,14 +594,14 @@ ggsave(
 ggsave(
   file = paste0("figures/plot_ap_urbn_type.png"), height = 10, width = 18, units = "cm",
   plot = plot_ap_urbn_type[[1]] + theme(legend.position = 'none',
-                                   panel.border = element_blank()), dpi = 300
+                                        panel.border = element_blank()), dpi = 300
 )
 ggsave(
   file = paste0("figures/plot_ap_urbn_type_text.png"), height = 10, width = 18, units = "cm",
   plot = plot_ap_urbn_type[[2]] + theme(legend.position = 'none',
-                                   panel.border = element_blank()), dpi = 300
+                                        panel.border = element_blank()), dpi = 300
 )
-leg = ggpubr::get_legend(plot_ap_urbn_type + theme(
+leg = ggpubr::get_legend(plot_ap_urbn_type[[1]] + theme(
   legend.direction = 'horizontal',
   legend.position = 'bottom',
   legend.key.size = unit(1, "cm"),
@@ -596,6 +609,15 @@ leg = ggpubr::get_legend(plot_ap_urbn_type + theme(
   legend.text = element_text(size = legend.text.size+5))
 )
 save(leg, file = paste0("figures/legend_urbn_type.RData"))
+
+leg = ggpubr::get_legend(plot_ap_urbn_type[[1]] + theme(
+  legend.direction = 'vertical',
+  legend.position = 'right',
+  legend.key.size = unit(0.75, "cm"),
+  legend.title = element_text(size = legend.text.size+5),
+  legend.text = element_text(size = legend.text.size+3))
+)
+save(leg, file = paste0("figures/legend_urbn_type_v.RData"))
 
 
 ## AP vs DEATHS SCATTERPLOT  ---------------------------------------------------
@@ -717,7 +739,7 @@ ggsave(
   file = paste0("figures/plot_ap_income_text.png"), height = 10, width = 18, units = "cm",
   plot = plot_ap_income[[2]] + theme(legend.position = 'none'), dpi = 300
 )
-leg = ggpubr::get_legend(plot_ap_income + theme(
+leg = ggpubr::get_legend(plot_ap_income[[1]] + theme(
   legend.direction = 'horizontal',
   legend.position = 'bottom',
   legend.key.size = unit(1, "cm"),
@@ -725,6 +747,31 @@ leg = ggpubr::get_legend(plot_ap_income + theme(
   legend.text = element_text(size = legend.text.size+5))
 )
 save(leg, file = paste0("figures/legend_income.RData"))
+
+legend_title = 'Income quintiles'
+legend_type = 'quintiles_v'
+legend_color = paste0(legend_type, '.color')
+legend_labs = paste0(legend_type, '.labs')
+leg = ggpubr::get_legend(plot_ap_income[[1]] + 
+   scale_color_manual(
+     values = get(legend_color),
+     name = legend_title,
+     labels = get(legend_labs)
+   ) +
+   scale_fill_manual(
+     values = get(legend_color),
+     name = legend_title,
+     labels = get(legend_labs)
+   ) +
+   guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+   theme(
+    legend.direction = 'vertical',
+    legend.position = 'right',
+    legend.key.size = unit(0.75, "cm"),
+    legend.title = element_text(size = legend.text.size+5),
+    legend.text = element_text(size = legend.text.size+3))
+)
+save(leg, file = paste0("figures/legend_income_v.RData"))
 
 ap_geo_income %>%
   dplyr::group_by(quintile) %>%
@@ -762,7 +809,7 @@ ap_geo_gini <- unique(ap_geo_gini) %>%
 plot_ap_gini <- prob_jitter_plot(ap_geo_gini %>% 
                                    dplyr::rename(item = ap), 
                                  legend_title = 'Gini quintiles', 
-                                 legend_type = 'quintiles',
+                                 legend_type = 'quintiles_v3',
                                  ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
   file = paste0("figures/plot_ap_gini.pdf"), height = 10, width = 18, units = "cm",
@@ -777,7 +824,7 @@ ggsave(
   plot = plot_ap_gini[[2]] + theme(legend.position = 'none'), dpi = 300
 )
 
-leg = ggpubr::get_legend(plot_ap_gini + theme(
+leg = ggpubr::get_legend(plot_ap_gini[[1]] + theme(
   legend.direction = 'horizontal',
   legend.position = 'bottom',
   legend.key.size = unit(1, "cm"),
@@ -785,6 +832,31 @@ leg = ggpubr::get_legend(plot_ap_gini + theme(
   legend.text = element_text(size = legend.text.size+5))
 )
 save(leg, file = paste0("figures/legend_gini.RData"))
+
+legend_title = 'Gini quintiles'
+legend_type = 'quintiles_v3'
+legend_color = paste0(legend_type, '.color')
+legend_labs = paste0(legend_type, '.labs')
+leg = ggpubr::get_legend(plot_ap_gini[[1]] + 
+                           scale_color_manual(
+                             values = get(legend_color),
+                             name = legend_title,
+                             labels = get(legend_labs)
+                           ) +
+                           scale_fill_manual(
+                             values = get(legend_color),
+                             name = legend_title,
+                             labels = get(legend_labs)
+                           ) +
+                           guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+                           theme(
+                             legend.direction = 'vertical',
+                             legend.position = 'right',
+                             legend.key.size = unit(0.75, "cm"),
+                             legend.title = element_text(size = legend.text.size+5),
+                             legend.text = element_text(size = legend.text.size+3))
+)
+save(leg, file = paste0("figures/legend_gini_v.RData"))
 
 
 ap_geo_gini %>%
@@ -823,10 +895,10 @@ ap_geo_per_elderly <- unique(ap_geo_per_elderly) %>%
 
 
 plot_ap_per_elderly <- prob_jitter_plot(ap_geo_per_elderly %>% 
-                                   dplyr::rename(item = ap), 
-                                 legend_title = 'Elderly proportion\nquintiles', 
-                                 legend_type = 'quintiles',
-                                 ox_text = 'PM2.5 concentration [ug/m3]')
+                                          dplyr::rename(item = ap), 
+                                        legend_title = 'Elderly proportion\nquintiles', 
+                                        legend_type = 'quintiles_v2',
+                                        ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
   file = paste0("figures/plot_ap_per_elderly.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_ap_per_elderly[[1]]
@@ -840,7 +912,7 @@ ggsave(
   plot = plot_ap_per_elderly[[2]] + theme(legend.position = 'none'), dpi = 300
 )
 
-leg = ggpubr::get_legend(plot_ap_per_elderly + theme(
+leg = ggpubr::get_legend(plot_ap_per_elderly[[1]] + theme(
   legend.direction = 'horizontal',
   legend.position = 'bottom',
   legend.key.size = unit(1, "cm"),
@@ -848,6 +920,31 @@ leg = ggpubr::get_legend(plot_ap_per_elderly + theme(
   legend.text = element_text(size = legend.text.size+5))
 )
 save(leg, file = paste0("figures/legend_per_elderly.RData"))
+
+legend_title = 'Elderly proportion\nquintiles'
+legend_type = 'quintiles_v2'
+legend_color = paste0(legend_type, '.color')
+legend_labs = paste0(legend_type, '.labs')
+leg = ggpubr::get_legend(plot_ap_per_elderly[[1]] + 
+                           scale_color_manual(
+                             values = get(legend_color),
+                             name = legend_title,
+                             labels = get(legend_labs)
+                           ) +
+                           scale_fill_manual(
+                             values = get(legend_color),
+                             name = legend_title,
+                             labels = get(legend_labs)
+                           ) +
+                           guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+                           theme(
+                             legend.direction = 'vertical',
+                             legend.position = 'right',
+                             legend.key.size = unit(0.75, "cm"),
+                             legend.title = element_text(size = legend.text.size+5),
+                             legend.text = element_text(size = legend.text.size+3))
+)
+save(leg, file = paste0("figures/legend_per_elderly_v.RData"))
 
 ap_geo_per_elderly %>%
   dplyr::group_by(quintile) %>%
@@ -1000,10 +1097,10 @@ deaths_geo_gini <- unique(deaths_geo_gini) %>%
 
 
 plot_deaths_gini <- prob_jitter_plot(deaths_geo_gini %>% 
-                                          dplyr::rename(item = deaths), 
-                                        legend_title = 'Gini quintiles', 
-                                        legend_type = 'quintiles',
-                                        ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
+                                       dplyr::rename(item = deaths), 
+                                     legend_title = 'Gini quintiles', 
+                                     legend_type = 'quintiles_v3',
+                                     ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
 ggsave(
   file = paste0("figures/plot_deaths_gini.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_deaths_gini[[1]]
@@ -1054,10 +1151,10 @@ deaths_geo_income <- unique(deaths_geo_income) %>%
   dplyr::ungroup()
 
 plot_deaths_income <- prob_jitter_plot(deaths_geo_income %>% 
-                                        dplyr::rename(item = deaths), 
-                                      legend_title = 'Income quintiles', 
-                                      legend_type = 'quintiles',
-                                      ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
+                                         dplyr::rename(item = deaths), 
+                                       legend_title = 'Income quintiles', 
+                                       legend_type = 'quintiles',
+                                       ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
 
 ggsave(
   file = paste0("figures/plot_deaths_income.pdf"), height = 10, width = 18, units = "cm",
@@ -1109,10 +1206,10 @@ deaths_geo_per_elderly <- unique(deaths_geo_per_elderly) %>%
 
 
 plot_deaths_per_elderly <- prob_jitter_plot(deaths_geo_per_elderly %>% 
-                                       dplyr::rename(item = deaths), 
-                                     legend_title = 'Elderly proportion\nquintiles', 
-                                     legend_type = 'quintiles',
-                                     ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
+                                              dplyr::rename(item = deaths), 
+                                            legend_title = 'Elderly proportion\nquintiles', 
+                                            legend_type = 'quintiles_v2',
+                                            ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
 ggsave(
   file = paste0("figures/plot_deaths_per_elderly.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_deaths_per_elderly[[1]]
@@ -1469,10 +1566,10 @@ ap_grid_per_elderly_sample <- ap_grid_per_elderly %>%
   dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
 plot_grid_ap_per_elderly <- prob_jitter_plot(ap_grid_per_elderly_sample %>% 
-                                              dplyr::rename(item = ap), 
-                                            legend_title = 'Elderly proportion\nquintiles', 
-                                            legend_type = 'quintiles',
-                                            ox_text = 'PM2.5 concentration [ug/m3]')
+                                               dplyr::rename(item = ap), 
+                                             legend_title = 'Elderly proportion\nquintiles', 
+                                             legend_type = 'quintiles_v2',
+                                             ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
   file = paste0("figures/plot_grid_ap_per_elderly.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_grid_ap_per_elderly[[1]]
@@ -1892,9 +1989,9 @@ deaths_grid_per_elderly_sample <- deaths_grid_per_elderly %>%
 
 plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample %>% 
                                                    dplyr::rename(item = deaths) %>% 
-                                                 dplyr::filter(item < 0.5), 
+                                                   dplyr::filter(item < 0.5), 
                                                  legend_title = 'Elderly proportion\nquintiles', 
-                                                 legend_type = 'quintiles',
+                                                 legend_type = 'quintiles_v2',
                                                  ox_text = 'Premature Deaths [Deaths per inhabitants]')
 ggsave(
   file = paste0("figures/plot_grid_deaths_per_elderly.pdf"), height = 10, width = 18, units = "cm",
@@ -1984,17 +2081,17 @@ ggsave(
 
 
 
-## COMBINED PLOTS --------------------------------------------------------------
+## COMBINED PLOTS by SOCIOECONOMIC category ------------------------------------
 
 # URBN TYPE
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_urbn_type.png")), 
-                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_urbn.png")), 
-                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_urbn_type.png")), 
-                      top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_urbn.png")), 
-                      top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_urbn_type.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
@@ -2031,13 +2128,13 @@ ggsave(file=file.path(paste0('figures/plot_combined_URBNTYPE_text.png')),
 
 # INCOME
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_income.png")), 
-                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_income.png")), 
-                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_income.png")), 
-                      top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_income.png")), 
-                      top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_income.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
@@ -2045,20 +2142,20 @@ legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_income.RData'
 pl <- gridExtra::arrangeGrob(
   pl, legend_centered, ncol = 1,
   heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
-  )
+)
 
 ggsave(file=file.path(paste0('figures/plot_combined_INCOME.pdf')), 
        plot = pl, height = 12, width = 18)
 
 
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_income_text.png")), 
-                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_income_text.png")), 
-                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_income_text.png")), 
-                      top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_income_text.png")), 
-                      top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_income.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
@@ -2066,7 +2163,7 @@ legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_income.RData'
 pl <- gridExtra::arrangeGrob(
   pl, legend_centered, ncol = 1,
   heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
-  )
+)
 
 ggsave(file=file.path(paste0('figures/plot_combined_INCOME_text.png')), 
        plot = pl, height = 12, width = 18)
@@ -2074,13 +2171,13 @@ ggsave(file=file.path(paste0('figures/plot_combined_INCOME_text.png')),
 
 # ELDERLY
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_per_elderly.png")), 
-                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_per_elderly.png")), 
-                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_per_elderly.png")), 
-                      top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_per_elderly.png")), 
-                      top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
@@ -2088,20 +2185,20 @@ legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly.R
 pl <- gridExtra::arrangeGrob(
   pl, legend_centered, ncol = 1,
   heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
-  )
+)
 
 ggsave(file=file.path(paste0('figures/plot_combined_ELDERLY.pdf')), 
        plot = pl, height = 12, width = 18)
 
 
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_per_elderly_text.png")), 
-                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_per_elderly_text.png")), 
-                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_per_elderly_text.png")), 
-                      top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_per_elderly_text.png")), 
-                      top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
@@ -2109,16 +2206,16 @@ legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly.R
 pl <- gridExtra::arrangeGrob(
   pl, legend_centered, ncol = 1,
   heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
-  )
+)
 
 ggsave(file=file.path(paste0('figures/plot_combined_ELDERLY_text.png')), 
        plot = pl, height = 12, width = 18)
 
 # GINI
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_gini.png")), 
-                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_gini.png")), 
-                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_gini.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
@@ -2126,16 +2223,16 @@ legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_gini.RData'))
 pl <- gridExtra::arrangeGrob(
   pl, legend_centered, ncol = 1,
   heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
-  )
+)
 
 ggsave(file=file.path(paste0('figures/plot_combined_GINI.pdf')), 
        plot = pl, height = 6, width = 18)
 
 
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_gini_text.png")), 
-                      top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_gini_text.png")), 
-                      top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, ncol = 2)
 legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_gini.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
@@ -2143,10 +2240,126 @@ legend_centered <- gridExtra::arrangeGrob(get(load('figures/legend_gini.RData'))
 pl <- gridExtra::arrangeGrob(
   pl, legend_centered, ncol = 1,
   heights = grid::unit.c(unit(1, "npc") - unit(2, "cm"), unit(2, "cm"))
-  )
+)
 
 ggsave(file=file.path(paste0('figures/plot_combined_GINI_text.png')), 
        plot = pl, height = 6, width = 18)
+
+
+
+## COMBINED PLOTS by AGGREGATION level -----------------------------------------
+
+# GRID
+# settlement
+grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_urbn.png")), 
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_urbn.png")), 
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_urbn <- gridExtra::arrangeGrob(get(load('figures/legend_urbn_type_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+# income
+grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_income.png")), 
+                                 top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_income.png")), 
+                                 top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_income <- gridExtra::arrangeGrob(get(load('figures/legend_income_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+# elderly
+grob_e <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_per_elderly.png")), 
+                                 top = grid::textGrob("e)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_f <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_per_elderly.png")), 
+                                 top = grid::textGrob("f)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_elderly <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+
+sp = 0.15
+ss = 0.25
+
+vp_small <- viewport(width = 0.01, height = 0.01)
+
+legend_urbn_grob <- grobTree(legend_urbn, vp = vp_small)
+legend_income_grob <- grobTree(legend_income, vp = vp_small)
+legend_elderly_grob <- grobTree(legend_elderly, vp = vp_small)
+
+row1 <- arrangeGrob(
+  grob_a, grob_b, nullGrob(), legend_urbn_grob,
+  ncol = 4,
+  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_urbn_grob))
+)
+row2 <- arrangeGrob(
+  grob_c, grob_d, nullGrob(), legend_income_grob,
+  ncol = 4,
+  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_income_grob))
+)
+row3 <- arrangeGrob(
+  grob_e, grob_f, nullGrob(), legend_elderly_grob,
+  ncol = 4,
+  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_elderly_grob))
+)
+pl_combined <- grid.arrange(row1, row2, row3, ncol = 1)
+
+ggsave(file=file.path(paste0('figures/plot_combined_GRID.pdf')), 
+       plot = pl_combined, height = 15, width = 18)
+
+
+
+# NUTS3
+# settlement
+grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_urbn_type.png")), 
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_urbn_type.png")), 
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_urbn <- gridExtra::arrangeGrob(get(load('figures/legend_urbn_type_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+# income
+grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_income.png")), 
+                                 top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_income.png")), 
+                                 top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_income <- gridExtra::arrangeGrob(get(load('figures/legend_income_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+# elderly
+grob_e <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_per_elderly.png")), 
+                                 top = grid::textGrob("e)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_f <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_per_elderly.png")), 
+                                 top = grid::textGrob("f)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_elderly <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+# gini
+grob_g <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_ap_gini.png")), 
+                                 top = grid::textGrob("g)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+grob_h <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_gini.png")), 
+                                 top = grid::textGrob("h)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_gini <- gridExtra::arrangeGrob(get(load('figures/legend_gini_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+
+sp = 0.15
+ss = 0.25
+
+vp_small <- viewport(width = 0.01, height = 0.01)
+
+legend_urbn_grob <- grobTree(legend_urbn, vp = vp_small)
+legend_income_grob <- grobTree(legend_income, vp = vp_small)
+legend_elderly_grob <- grobTree(legend_elderly, vp = vp_small)
+legend_gini_grob <- grobTree(legend_gini, vp = vp_small)
+
+row1 <- arrangeGrob(
+  grob_a, grob_b, nullGrob(), legend_urbn_grob,
+  ncol = 4,
+  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_urbn_grob))
+)
+row2 <- arrangeGrob(
+  grob_c, grob_d, nullGrob(), legend_income_grob,
+  ncol = 4,
+  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_income_grob))
+)
+row3 <- arrangeGrob(
+  grob_e, grob_f, nullGrob(), legend_elderly_grob,
+  ncol = 4,
+  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_elderly_grob))
+)
+row4 <- arrangeGrob(
+  grob_g, grob_h, nullGrob(), legend_gini_grob,
+  ncol = 4,
+  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_gini_grob))
+)
+pl_combined <- grid.arrange(row1, row2, row3, row4, ncol = 1)
+
+ggsave(file=file.path(paste0('figures/plot_combined_NUTS3.pdf')), 
+       plot = pl_combined, height = 20, width = 18)
 
 
 

@@ -111,15 +111,15 @@ prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title 
 
 
 
-urbn_type.color = c('City'='#C288B0',
+urbn_type.color = c('City'='#9253a6',
                     'Town/Suburb'='#C3D2D5',
-                    'Rural'='#92DEC3')
+                    'Rural'='#49a383')
 urbn_type.labs = c('City','Town/Suburb','Rural')
 names(urbn_type.labs) <- c('City','Town/Suburb','Rural')
 
-urbn_type.color.num = c('3'='#C288B0',
+urbn_type.color.num = c('3'='#9253a6',
                         '2'='#C3D2D5',   
-                        '1'='#92DEC3')
+                        '1'='#49a383')
 urbn_type.labs.num = c('City','Town/Suburb','Rural')
 names(urbn_type.labs.num) <- c('3','2','1')
 
@@ -138,6 +138,30 @@ long.discrete.color = c(
 #                     '3'='#a15e49',
 #                     '4'='#4e3822',
 #                     '5'='#2f1b25')
+quintiles_v3.color = c('1' = '#008080',
+                       '2' = '#66b2b2',
+                       '3' = '#f4d58d',
+                       '4' = '#e07a5f',
+                       '5' = '#6a0572')
+quintiles_v3.labs = c('Q1 - more egalitarian','Q2','Q3','Q4','Q5 - more unequal')
+names(quintiles_v3.labs) <- c('1','2','3','4','5')
+
+quintiles_v2.color = c('1' = '#3b4994',
+                       '2' = '#7c91c4',
+                       '3' = '#b2d5ba',
+                       '4' = '#f2b5d4',
+                       '5' = '#93003a')
+quintiles_v2.labs = c('Q1 - less elderly','Q2','Q3','Q4','Q5 - more elderly')
+names(quintiles_v2.labs) <- c('1','2','3','4','5')
+
+quintiles_v.color = c('1'='#335c67',
+                      '2'='#a7c957',
+                      '3'='#e09f3e',
+                      '4'='#9e2a2b',
+                      '5'='#540b0e')
+quintiles_v.labs = c('Q1 - poorest','Q2','Q3','Q4','Q5 - wealthiest')
+names(quintiles_v.labs) <- c('1','2','3','4','5')
+
 quintiles.color = c('1'='#335c67',
                     '2'='#a7c957',
                     '3'='#e09f3e',

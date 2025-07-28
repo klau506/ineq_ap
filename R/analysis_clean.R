@@ -20,6 +20,7 @@ source("R/zzz.R")
 # constants
 normalized <- T
 normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
+norm_grid_tag <- dplyr::if_else(normalized, '_norm', '')
 split_num <- 5 #10 deciles, 5 quintiles
 split_num_tag <- dplyr::if_else(split_num == 5, 'quintile', 
                                 dplyr::if_else(split_num == 10, 'decile',
@@ -144,7 +145,7 @@ ctry_values <- terra::values(ctry_raster)
 ctry_raster_values_mapping <- terra::cats(ctry_raster)[[1]]
 
 pm.ap_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
-pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_EU_NECP_LTT.RData")); rm(pm.mort_yy); gc()
+pm.mort_raster <- get(load(paste0("data/rfasst_output/pm.mort_mat_2030",norm_grid_tag,"_EU_NECP_LTT.RData"))); rm(pm.mort_yy); gc()
 inc_pc_2015 <- terra::rast("data/High-resolution_Downscaling/Europe_disp_inc_2015.tif")
 urbn_raster <- terra::rast("data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif")
 pop_ge65 <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-Y_GE65_2021_V2.tiff")
@@ -313,7 +314,7 @@ print(tail(dat_rank))
 
 
 ## GRID - DEATHS  -------------------------------------------------------------------------
-pm.mort_raster <- get(load("data/rfasst_output/pm.mort_mat_2030_EU_NECP_LTT.RData")); rm(pm.mort_yy); gc()
+pm.mort_raster <- get(load(paste0("data/rfasst_output/pm.mort_mat_2030",norm_grid_tag,"_EU_NECP_LTT.RData"))); rm(pm.mort_yy); gc()
 pm.mort_raster2 <- terra::setValues(pm.pre, pm.mort_raster[['total']])
 pm.mort_raster2 <- terra::crop(pm.mort_raster2, extent_raster)
 
@@ -328,46 +329,85 @@ filtered_raster <- pm.mort_raster2_europe
 filtered_raster[filtered_raster <= 0] <- NA
 filtered_raster[filtered_raster > 3.5] <- 3.5
 
-pdf("figures/plot_grid_mort.pdf", width = 11/2.54, height = 10/2.54)
-r <- raster::raster(filtered_raster)
-base_r <- raster::raster(eu_mask_raster2)
-colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
-par(mar = c(0, 0, 0, 0))
-raster::plot(base_r,
-             col = 'gray90',
-             legend = FALSE,
-             axes = FALSE,
-             box = FALSE,
-             useRaster = TRUE)
-raster::plot(r,
-             col = colors,
-             legend = FALSE,
-             axes = FALSE,
-             box = FALSE,
-             add = TRUE,
-             useRaster = TRUE)
-legend_ticks <- c(0, 1, 2, 3, raster::maxValue(r))
-legend_labels <- c("0", "1", "2", "3", paste0(">", floor(max(r[], na.rm = TRUE))))
-raster::plot(r, legend.only = TRUE,
-             col = colors,
-             legend.width = 1,
-             legend.shrink = 0.65,
-             frame.plot = FALSE,
-             axis.args = list(
-               at = legend_ticks,
-               labels = legend_labels,
-               font = 1,
-               cex.axis = legend.text.size.raster
-             ),
-             legend.args = list(
-               text = 'Premature Deaths\n[Deaths per inhabitants]',
-               side = 3,
-               font = 1,
-               line = 0.5,
-               cex = legend.title.size.raster
-             ))
-dev.off()
-
+if (normalized) {
+  pdf(paste0("figures/plot_grid_mort",norm_grid_tag,".pdf"), width = 11/2.54, height = 10/2.54)
+  r <- raster::raster(filtered_raster)
+  base_r <- raster::raster(eu_mask_raster2)
+  colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
+  par(mar = c(0, 0, 0, 0))
+  raster::plot(base_r,
+               col = 'gray90',
+               legend = FALSE,
+               axes = FALSE,
+               box = FALSE,
+               useRaster = TRUE)
+  raster::plot(r,
+               col = colors,
+               legend = FALSE,
+               axes = FALSE,
+               box = FALSE,
+               add = TRUE,
+               useRaster = TRUE)
+  legend_ticks <- c(0, 1, 2, 3, raster::maxValue(r))
+  legend_labels <- c("0", "1", "2", "3", paste0(">", floor(max(r[], na.rm = TRUE))))
+  raster::plot(r, legend.only = TRUE,
+               col = colors,
+               legend.width = 1,
+               legend.shrink = 0.65,
+               frame.plot = FALSE,
+               axis.args = list(
+                 font = 1,
+                 cex.axis = legend.text.size.raster
+               ),
+               legend.args = list(
+                 text = 'Premature Deaths\n[Population-Normalized]',
+                 side = 3,
+                 font = 1,
+                 line = 0.5,
+                 cex = legend.title.size.raster
+               ))
+  dev.off()
+} else {
+  pdf(paste0("figures/plot_grid_mort",norm_grid_tag,".pdf"), width = 11/2.54, height = 10/2.54)
+  r <- raster::raster(filtered_raster)
+  base_r <- raster::raster(eu_mask_raster2)
+  colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
+  par(mar = c(0, 0, 0, 0))
+  raster::plot(base_r,
+               col = 'gray90',
+               legend = FALSE,
+               axes = FALSE,
+               box = FALSE,
+               useRaster = TRUE)
+  raster::plot(r,
+               col = colors,
+               legend = FALSE,
+               axes = FALSE,
+               box = FALSE,
+               add = TRUE,
+               useRaster = TRUE)
+  legend_ticks <- c(0, 1, 2, 3, raster::maxValue(r))
+  legend_labels <- c("0", "1", "2", "3", paste0(">", floor(max(r[], na.rm = TRUE))))
+  raster::plot(r, legend.only = TRUE,
+               col = colors,
+               legend.width = 1,
+               legend.shrink = 0.65,
+               frame.plot = FALSE,
+               axis.args = list(
+                 at = legend_ticks,
+                 labels = legend_labels,
+                 font = 1,
+                 cex.axis = legend.text.size.raster
+               ),
+               legend.args = list(
+                 text = 'Premature Deaths\n[Absolute number]',
+                 side = 3,
+                 font = 1,
+                 line = 0.5,
+                 cex = legend.title.size.raster
+               ))
+  dev.off()
+}
 
 ## AP CTRY -------------------------------------------------------------------------
 ap_ctry <- ap %>%
@@ -1320,6 +1360,16 @@ ggsave(
   plot = plot_grid_ap_urbn[[2]] + theme(legend.position = 'none'), dpi = 300
 )
 
+# METHODOLOGY SKETCH FIGURE
+ggsave(
+  file = paste0("figures/meth_sketch/plot_urbntype_density_ap_grid.pdf"), height = 5, width = 10, units = "cm",
+  plot = plot_grid_ap_urbn[[1]] + theme(legend.position = 'none',
+                                        panel.border = element_blank(),
+                                        axis.title = element_blank()),
+  dpi = 300
+)
+# --
+
 df <- data.table::as.data.table(ap_grid_urbn_sample) %>% 
   dplyr::rename("urbn_type" = "quintile") %>% 
   dplyr::mutate(urbn_type = factor(urbn_type, levels = c('3','1','2')))
@@ -1725,19 +1775,26 @@ plot_grid_deaths_urbn <- prob_jitter_plot(deaths_grid_urbn_sample %>%
                                             dplyr::filter(item < 4), 
                                           legend_title = 'Urban type',
                                           legend_type = 'urbn_type',
-                                          ox_text = 'Premature deaths [Deaths per inhabitants]')
+                                          ox_text = dplyr::if_else(normalized,
+                                                                   'Premature deaths [Population-Normalized]',# per 1km\u00B2 grid cell]',
+                                                                   'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
+plot_grid_deaths_urbn[[1]] <- plot_grid_deaths_urbn[[1]] +
+  scale_x_continuous(labels = scales::scientific)
+plot_grid_deaths_urbn[[2]] <- plot_grid_deaths_urbn[[2]] +
+  scale_x_continuous(labels = scales::scientific)
+
 ggsave(
-  file = paste0("figures/plot_grid_deaths_urbn.pdf"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_urbn",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_urbn[[1]],
   bg = 'white'
 )
 ggsave(
-  file = paste0("figures/plot_grid_deaths_urbn.png"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_urbn",norm_grid_tag,".png"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_urbn[[1]] + theme(legend.position = 'none'), dpi = 300,
   bg = 'white'
 )
 ggsave(
-  file = paste0("figures/plot_grid_deaths_urbn_text.png"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_urbn_text",norm_grid_tag,".png"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_urbn[[2]] + theme(legend.position = 'none'), dpi = 300,
   bg = 'white'
 )
@@ -1763,7 +1820,9 @@ plot_urbntype_density <- ggplot(df_mort_urbn_no0 %>%
     labels = urbn_type.labs.num
   ) +
   labs(
-    x = "Premature Deaths [Deaths per inhabitants]",
+    x = dplyr::if_else(normalized,
+                       'Premature deaths [Population-Normalized per 1km\u00B2 grid cell]',
+                       'Premature deaths [Deaths per 1km\u00B2 grid cell]'),
     y = "Density"
   ) +
   ggpubr::theme_pubr() +
@@ -1785,7 +1844,7 @@ plot_urbntype_density <- ggplot(df_mort_urbn_no0 %>%
   )
 
 ggsave(
-  file = paste0("figures/plot_grid_mort_urbntype_density.pdf"), height = 12, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_mort_urbntype_density",norm_grid_tag,".pdf"), height = 12, width = 18, units = "cm",
   plot = plot_urbntype_density
 )
 
@@ -1845,17 +1904,19 @@ plot_grid_deaths_income <- prob_jitter_plot(deaths_grid_income_sample %>%
                                               dplyr::filter(item < 0.4), 
                                             legend_title = 'Income quintiles',
                                             legend_type = 'quintiles',
-                                            ox_text = 'Premature deaths [Deaths per inhabitants]')
+                                            ox_text = dplyr::if_else(normalized,
+                                                                     'Premature deaths [Population-Normalized]',# per 1km\u00B2 grid cell]',
+                                                                     'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 ggsave(
-  file = paste0("figures/plot_grid_deaths_income.pdf"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_income",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_income[[1]]
 )
 ggsave(
-  file = paste0("figures/plot_grid_deaths_income.png"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_income",norm_grid_tag,".png"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_income[[1]] + theme(legend.position = 'none'), dpi = 300
 )
 ggsave(
-  file = paste0("figures/plot_grid_deaths_income_text.png"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_income_text",norm_grid_tag,".png"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_income[[2]] + theme(legend.position = 'none'), dpi = 300
 )
 
@@ -1905,7 +1966,9 @@ plot_inc_density <-
     labels = quintiles.labs.income.grid
   ) +
   labs(
-    x = "Premature Deaths [Deaths per inhabitants]",
+    x = dplyr::if_else(normalized,
+                       'Premature deaths [Population-Normalized per 1km\u00B2 grid cell]',
+                       'Premature deaths [Deaths per 1km\u00B2 grid cell]'),
     y = "Density"
   ) +
   ggpubr::theme_pubr() +
@@ -1927,7 +1990,7 @@ plot_inc_density <-
   )
 
 ggsave(
-  file = paste0("figures/plot_grid_income_density.pdf"), height = 12, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_income_density",norm_grid_tag,".pdf"), height = 12, width = 18, units = "cm",
   plot = plot_inc_density
 )
 
@@ -1992,17 +2055,19 @@ plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample 
                                                    dplyr::filter(item < 0.5), 
                                                  legend_title = 'Elderly proportion\nquintiles', 
                                                  legend_type = 'quintiles_v2',
-                                                 ox_text = 'Premature Deaths [Deaths per inhabitants]')
+                                                 ox_text = dplyr::if_else(normalized,
+                                                                          'Premature deaths [Population-Normalized]',# per 1km\u00B2 grid cell]',
+                                                                          'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 ggsave(
-  file = paste0("figures/plot_grid_deaths_per_elderly.pdf"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_per_elderly",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_per_elderly[[1]]
 )
 ggsave(
-  file = paste0("figures/plot_grid_deaths_per_elderly.png"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_per_elderly",norm_grid_tag,".png"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_per_elderly[[1]] + theme(legend.position = 'none'), dpi = 300
 )
 ggsave(
-  file = paste0("figures/plot_grid_deaths_per_elderly_text.png"), height = 10, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_deaths_per_elderly_text",norm_grid_tag,".png"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_per_elderly[[2]] + theme(legend.position = 'none'), dpi = 300
 )
 
@@ -2052,7 +2117,9 @@ plot_eld_density <-
     labels = quintiles.labs.per_elderly.grid
   ) +
   labs(
-    x = "Premature Deaths [Deaths per inhabitants]",
+    x = dplyr::if_else(normalized,
+                       'Premature deaths [Population-Normalized per 1km\u00B2 grid cell]',
+                       'Premature deaths [Deaths per 1km\u00B2 grid cell]'),
     y = "Density"
   ) +
   ggpubr::theme_pubr() +
@@ -2074,7 +2141,7 @@ plot_eld_density <-
   )
 
 ggsave(
-  file = paste0("figures/plot_grid_mort_elderly_density.pdf"), height = 12, width = 18, units = "cm",
+  file = paste0("figures/plot_grid_mort_elderly_density",norm_grid_tag,".pdf"), height = 12, width = 18, units = "cm",
   plot = plot_eld_density
 )
 
@@ -2253,52 +2320,94 @@ ggsave(file=file.path(paste0('figures/plot_combined_GINI_text.png')),
 # settlement
 grob_a <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_urbn.png")), 
                                  top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_urbn.png")), 
+grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_urbn",norm_grid_tag,".png"))), 
                                  top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 legend_urbn <- gridExtra::arrangeGrob(get(load('figures/legend_urbn_type_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
 # income
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_income.png")), 
                                  top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_income.png")), 
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_income",norm_grid_tag,".png"))), 
                                  top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 legend_income <- gridExtra::arrangeGrob(get(load('figures/legend_income_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
 # elderly
 grob_e <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_ap_per_elderly.png")), 
                                  top = grid::textGrob("e)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_f <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_per_elderly.png")), 
+grob_f <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_per_elderly",norm_grid_tag,".png"))), 
                                  top = grid::textGrob("f)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 legend_elderly <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
 
 sp = 0.15
 ss = 0.25
 
-vp_small <- viewport(width = 0.01, height = 0.01)
+vp_small <- grid::viewport(width = 0.01, height = 0.01)
 
-legend_urbn_grob <- grobTree(legend_urbn, vp = vp_small)
-legend_income_grob <- grobTree(legend_income, vp = vp_small)
-legend_elderly_grob <- grobTree(legend_elderly, vp = vp_small)
+legend_urbn_grob <- grid::grobTree(legend_urbn, vp = vp_small)
+legend_income_grob <- grid::grobTree(legend_income, vp = vp_small)
+legend_elderly_grob <- grid::grobTree(legend_elderly, vp = vp_small)
 
-row1 <- arrangeGrob(
-  grob_a, grob_b, nullGrob(), legend_urbn_grob,
+row1 <- gridExtra::arrangeGrob(
+  grob_a, grob_b, grid::nullGrob(), legend_urbn_grob,
   ncol = 4,
-  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_urbn_grob))
+  widths = grid::unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_urbn_grob))
 )
-row2 <- arrangeGrob(
-  grob_c, grob_d, nullGrob(), legend_income_grob,
+row2 <- gridExtra::arrangeGrob(
+  grob_c, grob_d, grid::nullGrob(), legend_income_grob,
   ncol = 4,
-  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_income_grob))
+  widths = grid::unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_income_grob))
 )
-row3 <- arrangeGrob(
-  grob_e, grob_f, nullGrob(), legend_elderly_grob,
+row3 <- gridExtra::arrangeGrob(
+  grob_e, grob_f, grid::nullGrob(), legend_elderly_grob,
   ncol = 4,
-  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_elderly_grob))
+  widths = grid::unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_elderly_grob))
 )
-pl_combined <- grid.arrange(row1, row2, row3, ncol = 1)
+pl_combined <- gridExtra::grid.arrange(row1, row2, row3, ncol = 1)
 
-ggsave(file=file.path(paste0('figures/plot_combined_GRID.pdf')), 
+ggsave(file=file.path(paste0('figures/plot_combined_GRID',norm_grid_tag,'.pdf')), 
        plot = pl_combined, height = 15, width = 18)
 
 
+# GRID - NO NORM (SI)
+# settlement
+grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_urbn.png"))), 
+                                 top = grid::textGrob("a)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_urbn <- gridExtra::arrangeGrob(get(load('figures/legend_urbn_type_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+# income
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_income.png"))), 
+                                 top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_income <- gridExtra::arrangeGrob(get(load('figures/legend_income_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+# elderly
+grob_f <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_per_elderly.png"))), 
+                                 top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
+legend_elderly <- gridExtra::arrangeGrob(get(load('figures/legend_per_elderly_v.RData')), top = NULL, bottom = NULL, left = NULL, right = NULL, padding = unit(0, "line"))
+
+sp = 0.15
+ss = 0.25
+
+vp_small <- grid::viewport(width = 0.01, height = 0.01)
+
+legend_urbn_grob <- grid::grobTree(legend_urbn, vp = vp_small)
+legend_income_grob <- grid::grobTree(legend_income, vp = vp_small)
+legend_elderly_grob <- grid::grobTree(legend_elderly, vp = vp_small)
+
+row1 <- gridExtra::arrangeGrob(
+  grob_b, grid::nullGrob(), legend_urbn_grob,
+  ncol = 3,
+  widths = grid::unit.c(unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_urbn_grob))
+)
+row2 <- gridExtra::arrangeGrob(
+  grob_d, grid::nullGrob(), legend_income_grob,
+  ncol = 3,
+  widths = grid::unit.c(unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_income_grob))
+)
+row3 <- gridExtra::arrangeGrob(
+  grob_f, grid::nullGrob(), legend_elderly_grob,
+  ncol = 3,
+  widths = grid::unit.c(unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_elderly_grob))
+)
+pl_combined <- gridExtra::grid.arrange(row1, row2, row3, ncol = 1)
+
+ggsave(file=file.path(paste0('figures/plot_combined_GRID_noNorm.pdf')), 
+       plot = pl_combined, height = 15, width = 12)
 
 # NUTS3
 # settlement

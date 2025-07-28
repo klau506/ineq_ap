@@ -1868,7 +1868,7 @@ df_mort_inc <- data.frame(pm_mort = pm.mort_values[valid_idx],
                           inc_per_capita = inc_values[valid_idx],
                           ctry_names = ctry_values[valid_idx])
 
-df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort > 0,]
+df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort > 0.15e-4,]
 df_mort_inc_no0 <- df_mort_inc_no0[df_mort_inc_no0$inc_per_capita > 0,]
 df_mort_inc_no0 <- unique(df_mort_inc_no0) %>% 
   dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(inc_per_capita, 5))) %>% 
@@ -2021,7 +2021,7 @@ df_mort_eld <- data.frame(pm_mort = pm.mort_values[valid_idx],
                           pop_elderly_per = pop_elderly[valid_idx],
                           ctry_names = ctry_values[valid_idx])
 
-df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0,]
+df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0.15e-4,]
 df_mort_eld_no0 <- df_mort_eld_no0[df_mort_eld_no0$pop_elderly_per > 0,]
 df_mort_eld_no0 <- unique(df_mort_eld_no0) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
@@ -3072,6 +3072,7 @@ urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
 
 
 # Filter out NA values directly on the rasters
+pm.mort_raster2_filtered <- terra::mask(pm.mort_raster2, pm.mort_raster2, maskvalue = NA)
 inc_pc_20152_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
 urbn_raster_filtered <- urbn_raster_combined$classification_layer
 urbn_raster_combined_filtered <- terra::mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
@@ -3080,19 +3081,22 @@ elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
 # Convert the filtered rasters to data frames
 inc_values <- terra::values(inc_pc_20152_filtered)
 urbn_values <- terra::values(urbn_raster_combined_filtered)
-pop_elderly <- terra::values(elderly_raster_filtered)
+pop_elderly_values <- terra::values(elderly_raster_filtered)
+pm.mort_values <- terra::values(pm.mort_raster2_filtered)
 
 # Remove NA values
-valid_idx <- !is.na(inc_values) & !is.na(urbn_values) & !is.na(pop_elderly)
-df_cells <- data.frame(inc_per_capita = inc_values[valid_idx],
-                                urbn_type = urbn_values[valid_idx],
-                                pop_elderly_per = pop_elderly[valid_idx],
-                                ctry_names = ctry_values[valid_idx])
+valid_idx <- !is.na(inc_values) & !is.na(urbn_values) & !is.na(pop_elderly_values) & !is.na(pm.mort_values)
+df_cells <- data.frame(pm.mort = pm.mort_values[valid_idx],
+                       inc_per_capita = inc_values[valid_idx],
+                       urbn_type = urbn_values[valid_idx],
+                       pop_elderly_per = pop_elderly_values[valid_idx],
+                       ctry_names = ctry_values[valid_idx])
 
 df_cells_no0 <- df_cells
 df_cells_no0 <- df_cells_no0[df_cells_no0$urbn_type > 0,]
 df_cells_no0 <- df_cells_no0[df_cells_no0$inc_per_capita > 0,]
 df_cells_no0 <- df_cells_no0[df_cells_no0$pop_elderly_per > 0,]
+df_cells_no0 <- df_cells_no0[df_cells_no0$pm.mort > 0.15e-4,]
 
 df_cells_no0 <- unique(df_cells_no0) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
@@ -3142,7 +3146,7 @@ df_cells_urbn_inc_count <- merge(
                     
 pl <- count_cells_plot(df_cells_urbn_inc_count, axis_title = 'Income quintile')
 ggsave(
-  file = paste0("figures/plot_count_cells_urbn_income.pdf"), height = 15, width = 18, units = "cm",
+  file = paste0("figures/plot_count_cells_urbn_income.pdf"), height = 13, width = 18, units = "cm",
   plot = pl,
   bg = 'white'
 )
@@ -3174,7 +3178,89 @@ df_cells_urbn_eld_count <- merge(
   )
 pl <- count_cells_plot(df_cells_urbn_eld_count, axis_title = 'Elderly proportion quintiles')
 ggsave(
-  file = paste0("figures/plot_count_cells_urbn_elderly.pdf"), height = 15, width = 18, units = "cm",
+  file = paste0("figures/plot_count_cells_urbn_elderly.pdf"), height = 13, width = 18, units = "cm",
   plot = pl,
   bg = 'white'
 )
+
+
+## MAP income quintiles by grid cell
+inc_pc_20152_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
+inc_values <- terra::values(inc_pc_20152_filtered)
+
+quintiles <- dplyr::ntile(inc_values, 5)
+quintile_raster <- inc_pc_20152_filtered
+terra::values(quintile_raster) <- quintiles
+names(quintile_raster) <- "quintile_inc"
+
+pdf("figures/plot_grid_inc_quintiles.pdf", width = 11/2.54, height = 10/2.54)
+par(mar = c(0,0,0,0), xpd = NA)
+r <- raster::raster(quintile_raster)
+terra::plot(r, 
+            col = quintiles_v.color, 
+            breaks = 1:5,
+            legend = FALSE, 
+            axes = FALSE, 
+            box = FALSE)
+legend('bottom',
+       legend = quintiles_v.labs,
+       pch = 21,
+       pt.bg = quintiles_v.color,
+       pt.cex = 1,
+       bty = "n",
+       title = "Income Quintile",
+       text.font = 1,
+       cex = legend.title.size.raster-0.2,
+       x.intersp = 1, y.intersp = 1.2,
+       horiz = TRUE)
+dev.off()
+
+legend.args=list(
+  legend = quintiles_v.labs,
+  pch = 21,
+  pt.bg = quintiles_v.color,
+  pt.cex = 1,
+  bty = "n",
+  text = "Income Quintile",
+  text.font = 1,
+  cex = legend.title.size.raster-0.1,
+  x.intersp = 1, y.intersp = 1.2
+)
+
+
+## MAP income quintile in Urban grid cells
+inc_pc_20152_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
+inc_values <- terra::values(inc_pc_20152_filtered)
+
+quintiles <- dplyr::ntile(inc_values, 5)
+quintile_raster <- inc_pc_20152_filtered
+terra::values(quintile_raster) <- quintiles
+names(quintile_raster) <- "quintile_inc"
+
+
+urbn_mask <- urbn_raster_combined_filtered == 3 # only cities
+inc_pc_2015_CITIES_filtered <- terra::mask(quintile_raster, urbn_mask, maskvalues = 0, updatevalue = NA)
+names(inc_pc_2015_CITIES_filtered) <- "inc_cities"
+
+pdf("figures/plot_grid_inc_quintiles_cities.pdf", width = 11/2.54, height = 10/2.54)
+par(mar = c(0,0,0,0), xpd = NA)
+r <- raster::raster(inc_pc_2015_CITIES_filtered)
+terra::plot(r, 
+            col = quintiles_v.color, 
+            breaks = 1:5,
+            legend = FALSE, 
+            axes = FALSE, 
+            box = FALSE)
+legend('bottom',
+       legend = quintiles_v.labs,
+       pch = 21,
+       pt.bg = quintiles_v.color,
+       pt.cex = 1,
+       bty = "n",
+       title = "Income Quintile",
+       text.font = 1,
+       cex = legend.title.size.raster-0.2,
+       x.intersp = 1, y.intersp = 1.2,
+       horiz = TRUE)
+dev.off()
+

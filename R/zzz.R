@@ -110,15 +110,77 @@ prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title 
 }
 
 
+count_cells_plot <- function(data, axis_title = '') {
+  legend_title = 'Urban type'
+  legend_type = 'urbn_type'
+  legend_color = paste0(legend_type, '.color')
+  legend_labs = paste0(legend_type, '.labs')
+  
+  pl <- ggplot(data,
+               mapping = aes(x = n, y = y_offset, shape = agg_level,
+                             fill = urbn_type, color = urbn_type)) +
+    geom_hline(data = dplyr::distinct(data, y_offset),
+               aes(yintercept = y_offset),
+               color = "grey90") +
+    geom_point(size = 3, alpha = 0.8) +
+    scale_color_manual(
+      values = get(legend_color),
+      name = legend_title,
+      labels = get(legend_labs)
+    ) +
+    scale_fill_manual(
+      values = get(legend_color),
+      name = legend_title,
+      labels = get(legend_labs)
+    ) +
+    scale_shape_manual(
+      values = agg.level_shape,
+      name = 'Aggregation level',
+      labels = agg.level_labs
+    ) +
+    guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA, size = 2)),
+           shape = guide_legend(override.aes = list(alpha = 1, size = 2)))  +
+    scale_y_continuous(
+      breaks = 1:5,
+      labels = paste0("Q", 1:5),
+      expand = expansion(mult = c(0.05, 0.05))
+    ) +
+    scale_x_continuous(breaks = c(0, 25, 50, 75, 100),
+                       labels = function(x) paste0(x, "%")) +
+    theme_minimal() +
+    labs(x = "Share of spatial units [%]",
+         y = axis_title,
+         color = legend_title) +
+    theme(
+      panel.background = element_rect(fill = "white", color = "white"),
+      panel.grid.major.y = element_line(color = "white"),
+      panel.grid.major.x = element_line(color = "gray90"),
+      panel.grid.minor.x = element_blank(),
+      panel.ontop = FALSE,
+      axis.text = element_text(size = legend.text.size),
+      axis.title = element_text(size = legend.title.size),
+      legend.key.size = unit(0.6, "cm"),
+      legend.title = element_text(size = legend.title.size),
+      legend.text = element_text(size = legend.text.size),
+      legend.position = 'bottom',
+      legend.direction = 'horizontal'
+    )
+  
+  return(pl)
+}
+
+agg.level_shape = c(16,15)
+agg.level_labs = c('n_grid' = '1km\u00B2 grid cell',
+                   'n_nuts' = 'NUTS3')
 
 urbn_type.color = c('City'='#9253a6',
-                    'Town/Suburb'='#C3D2D5',
+                    'Town/Suburb'='#819499',
                     'Rural'='#49a383')
 urbn_type.labs = c('City','Town/Suburb','Rural')
 names(urbn_type.labs) <- c('City','Town/Suburb','Rural')
 
 urbn_type.color.num = c('3'='#9253a6',
-                        '2'='#C3D2D5',   
+                        '2'='#819499',   
                         '1'='#49a383')
 urbn_type.labs.num = c('City','Town/Suburb','Rural')
 names(urbn_type.labs.num) <- c('3','2','1')

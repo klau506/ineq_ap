@@ -3037,3 +3037,144 @@ ggsave(
   plot = pl
 )
 
+
+# ==============================================================================
+#                                  CELLS COUNT                                 #
+# ==============================================================================
+
+## GRID
+urbn_raster2 <- terra::resample(urbn_raster, pm.mort_raster2)
+urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
+inc_pc_20152 <- terra::project(inc_pc_2015, pm.mort_raster2)
+inc_pc_20152 <- terra::resample(inc_pc_20152, pm.mort_raster2)
+inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
+pop_ge652 <- terra::project(pop_ge65, pm.mort_raster2)
+pop_ge652 <- terra::resample(pop_ge652, pm.mort_raster2)
+pop_ge652 <- terra::crop(pop_ge652, extent_raster)
+pop_t2 <- terra::project(pop_t, pm.mort_raster2)
+pop_t2 <- terra::resample(pop_t2, pm.mort_raster2)
+pop_t2 <- terra::crop(pop_t2, extent_raster)
+pop_elderly <- pop_ge652/pop_t2
+
+# Define classification function
+classify_function <- function(x) {
+  ifelse(x <= 10, 0, 
+         ifelse(x >= 11 & x <= 20, 1, # rural
+                ifelse(x >= 21 & x <= 22, 2, # town/suburb
+                       ifelse(x >= 23 & x <= 30, 3, NA)))) # urban
+}
+
+# Apply classification
+urbn_raster_classified <- terra::app(urbn_raster2, classify_function)
+names(urbn_raster_classified) <- "classification_layer"
+urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
+
+
+
+# Filter out NA values directly on the rasters
+inc_pc_20152_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
+urbn_raster_filtered <- urbn_raster_combined$classification_layer
+urbn_raster_combined_filtered <- terra::mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
+elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
+
+# Convert the filtered rasters to data frames
+inc_values <- terra::values(inc_pc_20152_filtered)
+urbn_values <- terra::values(urbn_raster_combined_filtered)
+pop_elderly <- terra::values(elderly_raster_filtered)
+
+# Remove NA values
+valid_idx <- !is.na(inc_values) & !is.na(urbn_values) & !is.na(pop_elderly)
+df_cells <- data.frame(inc_per_capita = inc_values[valid_idx],
+                                urbn_type = urbn_values[valid_idx],
+                                pop_elderly_per = pop_elderly[valid_idx],
+                                ctry_names = ctry_values[valid_idx])
+
+df_cells_no0 <- df_cells
+df_cells_no0 <- df_cells_no0[df_cells_no0$urbn_type > 0,]
+df_cells_no0 <- df_cells_no0[df_cells_no0$inc_per_capita > 0,]
+df_cells_no0 <- df_cells_no0[df_cells_no0$pop_elderly_per > 0,]
+
+df_cells_no0 <- unique(df_cells_no0) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
+  dplyr::mutate(quintile_inc = as.factor(dplyr::ntile(inc_per_capita, 5))) %>% 
+  dplyr::mutate(quintile_eld = as.factor(dplyr::ntile(pop_elderly_per, 5))) %>%  
+  dplyr::mutate(urbn_type = dplyr::if_else(urbn_type == 1, 'Rural',
+                                           dplyr::if_else(urbn_type == 2, 'Town/Suburb',
+                                                          dplyr::if_else(urbn_type == 3, 'City', NA)))) %>% 
+  dplyr::mutate(urbn_type = forcats::fct_relevel(urbn_type, 'City','Town/Suburb','Rural'))
+  
+
+## NUTS3
+df_cells_nuts3 <- data.table::as.data.table(deaths_socioecon_sf) %>%
+  dplyr::select(urbn_type, inc_per_capita = income, pop_elderly_per = per_elderly)
+df_cells_nuts3_no0 <- unique(df_cells_nuts3) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
+  dplyr::mutate(quintile_inc = as.factor(dplyr::ntile(inc_per_capita, 5))) %>% 
+  dplyr::mutate(quintile_eld = as.factor(dplyr::ntile(pop_elderly_per, 5))) %>%  
+  dplyr::mutate(urbn_type = forcats::fct_relevel(urbn_type, 'City','Town/Suburb','Rural'))
+
+
+## PLOTS
+df_cells_urbn_inc_count_grid <- df_cells_no0 %>% 
+  dplyr::group_by(quintile = quintile_inc, urbn_type) %>%
+  dplyr::summarise(n_grid = dplyr::n(), .groups = "drop") %>% 
+  dplyr::group_by(quintile) %>%
+  dplyr::mutate(n_grid = 100 * n_grid / sum(n_grid)) %>% 
+  dplyr::ungroup()
+df_cells_urbn_inc_count_nuts <- df_cells_nuts3_no0 %>% 
+  dplyr::group_by(quintile = quintile_inc, urbn_type) %>%
+  dplyr::summarise(n_nuts = dplyr::n(), .groups = "drop") %>% 
+  dplyr::group_by(quintile) %>%
+  dplyr::mutate(n_nuts = 100 * n_nuts / sum(n_nuts)) %>% 
+  dplyr::ungroup()
+df_cells_urbn_inc_count <- merge(
+  df_cells_urbn_inc_count_nuts,
+  df_cells_urbn_inc_count_grid,
+  by = c('quintile','urbn_type')
+) %>% 
+  tidyr::pivot_longer(cols = c('n_nuts','n_grid'), names_to = 'agg_level', values_to = 'n') %>% 
+  dplyr::mutate(quintile_num = as.numeric(quintile),
+                y_offset = dplyr::case_when(
+                  agg_level == "n_grid" ~ quintile_num + 0.05,
+                  agg_level == "n_nuts" ~ quintile_num - 0.05
+                  )
+  )
+                    
+pl <- count_cells_plot(df_cells_urbn_inc_count, axis_title = 'Income quintile')
+ggsave(
+  file = paste0("figures/plot_count_cells_urbn_income.pdf"), height = 15, width = 18, units = "cm",
+  plot = pl,
+  bg = 'white'
+)
+
+
+df_cells_urbn_eld_count_grid <- df_cells_no0 %>% 
+  dplyr::group_by(quintile = quintile_eld, urbn_type) %>%
+  dplyr::summarise(n_grid = dplyr::n(), .groups = "drop") %>% 
+  dplyr::group_by(quintile) %>%
+  dplyr::mutate(n_grid = 100 * n_grid / sum(n_grid)) %>% 
+  dplyr::ungroup()
+df_cells_urbn_eld_count_nuts <- df_cells_nuts3_no0 %>% 
+  dplyr::group_by(quintile = quintile_eld, urbn_type) %>%
+  dplyr::summarise(n_nuts = dplyr::n(), .groups = "drop") %>% 
+  dplyr::group_by(quintile) %>%
+  dplyr::mutate(n_nuts = 100 * n_nuts / sum(n_nuts)) %>% 
+  dplyr::ungroup()
+df_cells_urbn_eld_count <- merge(
+  df_cells_urbn_eld_count_nuts,
+  df_cells_urbn_eld_count_grid,
+  by = c('quintile','urbn_type')
+) %>% 
+  tidyr::pivot_longer(cols = c('n_nuts','n_grid'), names_to = 'agg_level', values_to = 'n') %>% 
+  dplyr::mutate(quintile_num = as.numeric(quintile),
+                y_offset = dplyr::case_when(
+                  agg_level == "n_grid" ~ quintile_num + 0.05,
+                  agg_level == "n_nuts" ~ quintile_num - 0.05
+                )
+  )
+pl <- count_cells_plot(df_cells_urbn_eld_count, axis_title = 'Elderly proportion quintiles')
+ggsave(
+  file = paste0("figures/plot_count_cells_urbn_elderly.pdf"), height = 15, width = 18, units = "cm",
+  plot = pl,
+  bg = 'white'
+)

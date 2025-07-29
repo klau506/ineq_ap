@@ -12,6 +12,7 @@ library(ggplot2)
 library(tmap)
 library(magrittr)
 library(ggpubr)
+library(ggnewscale)
 
 # helper scripts
 source("R/utils.R")
@@ -126,6 +127,13 @@ ctry_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level =
   dplyr::select(-FID)
 
 # GRID data
+
+# download country boundaries (scale = "medium" is usually good enough)
+countries_sf <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+# convert to SpatVector for terra
+countries_vect <- terra::vect(countries_sf)
+
+# reference data
 extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
 pm.pre <- terra::rast(paste0('../../GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/', 'Reference_vintage_eur_v2', '_', 2030,'_pm25_fin_weighted.tif'))
 pm.pre <- terra::crop(pm.pre, extent_raster)
@@ -144,6 +152,7 @@ ctry_raster <- terra::rasterize(ctry_raster, pm.pre, field = "ctry_code")
 ctry_values <- terra::values(ctry_raster)
 ctry_raster_values_mapping <- terra::cats(ctry_raster)[[1]]
 
+# rfasst and socioeconomic data
 pm.ap_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
 pm.mort_raster <- get(load(paste0("data/rfasst_output/pm.mort_mat_2030",norm_grid_tag,"_EU_NECP_LTT.RData"))); rm(pm.mort_yy); gc()
 inc_pc_2015 <- terra::rast("data/High-resolution_Downscaling/Europe_disp_inc_2015.tif")
@@ -2856,40 +2865,74 @@ data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","c
                       names_to = "variable", values_to = "value") %>% 
   dplyr::mutate(quintile = as.factor(quintile),
                 urbn_type = as.factor(urbn_type))
+data$country_name <- countrycode::countrycode(data$ctry, origin = "iso2c", destination = "country.name")
 
 # Plotting
 pl <- ggplot() +
+  # income
   geom_point(
-    data = data %>% 
-      dplyr::select(quintile, ctry, variable, value) %>% 
-      dplyr::filter(variable != 'urbn') %>% 
+    data = data %>%
+      dplyr::select(quintile, country_name, variable, value) %>%
+      dplyr::filter(variable == 'income') %>%
       dplyr::distinct(),
-    aes(y = factor(ctry), x = value, color = quintile), size = 2, alpha = 0.85) + 
+    aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) +
+  scale_color_manual(
+    values = quintiles_v.color,
+    name = "Income quintile",
+    labels = quintiles_v.labs
+  ) +
+  new_scale_colour() +
+  # elderly
+  geom_point(
+    data = data %>%
+      dplyr::select(quintile, country_name, variable, value) %>%
+      dplyr::filter(variable == 'elderly') %>%
+      dplyr::distinct(),
+    aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) +
+  scale_color_manual(
+    values = quintiles_v2.color,
+    name = "Elderly proportion\nquintile",
+    labels = quintiles_v2.labs
+  ) +
+  # settlement
   geom_point(
     data = data %>% 
-      dplyr::select(urbn_type, ctry, variable, value) %>% 
+      dplyr::select(urbn_type, country_name, variable, value) %>% 
       dplyr::filter(variable == 'urbn') %>% 
       dplyr::distinct(),
-    aes(y = factor(ctry), x = value, fill = urbn_type), shape = 21, size = 2) +
-  facet_grid(. ~ variable,
-             labeller = labeller(variable = c(income_medi = "Income\nper capita",
-                                              elderly_medi = "Elderly\nproportion",
-                                              urbn_medi = "Urban\ntype"))) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Quintile",
-    labels = quintiles.labs
-  ) +
+    aes(y = factor(country_name), x = value, fill = urbn_type), size = 2, shape = 21) +
   scale_fill_manual(
     values = urbn_type.color,
-    name = "Urban type",
+    name = "Settlement type",
     labels = urbn_type.labs
   ) +
+  # rest of the plot
+  facet_grid(. ~ variable,
+             labeller = labeller(variable = c(income = "Income\nper capita",
+                                              elderly = "Elderly\nproportion",
+                                              urbn = "Settlement\ntype")),
+             scales = 'fixed') +
   labs(x = "PM2.5 concentration [ug/m3]", y = "") +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "white", color = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title = element_text(size = legend.title.size),
+    axis.title.y = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.text.size),
+    legend.text = element_text(size = legend.text.size),
+    legend.position = 'right'
+  )
 
 ggsave(
-  file = paste0("figures/withinCtry/fig_ap_var_",yy,"_",split_num_tag,"_grid.pdf"), height = 10, width = 15, units = "cm",
+  file = paste0("figures/withinCtry/fig_ap_var_",yy,"_",split_num_tag,"_grid.pdf"), height = 13, width = 18, units = "cm",
   plot = pl
 )
 
@@ -2917,7 +2960,7 @@ data <- deaths_income_medi %>%
 
 ml_do_all(data, 8, 'withinCtry/ml_income_grid',
           fig_legend = "Income\nper capita\nquintile",
-          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
+          fig_ox_label = "Premature Deaths [Population-Normalized]",
           fix = T, type = 'deaths')
 
 ## GRID - DEATHS vs ELDERLY --------------------------------------------------------------
@@ -2942,32 +2985,8 @@ data <- deaths_elderly_medi %>%
 
 ml_do_all(data, 3, 'withinCtry/ml_elderly_grid',
           fig_legend = "Elderly\nproportion\nquintile",
-          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
+          fig_ox_label = "Premature Deaths [Population-Normalized]",
           type = 'deaths')
-
-## GRID - DEATHS vs GINI ------------------------------------------------------------------
-deaths_gini_medi <- data.table::as.data.table(deaths_socioecon_sf) %>%
-  dplyr::select(ctry, gini, deaths) %>% 
-  unique() %>% 
-  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
-  dplyr::group_by(ctry) %>% 
-  dplyr::mutate(quintile = as.factor(dplyr::ntile(gini, split_num))) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::group_by(quintile, ctry) %>% 
-  dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
-  dplyr::ungroup()
-
-data <- deaths_gini_medi %>%
-  tibble::as_tibble() %>% 
-  dplyr::mutate(quintile = paste0('Q',quintile)) %>%
-  dplyr::arrange(quintile, ctry) %>% 
-  tidyr::pivot_wider(names_from = 'quintile', values_from = 'medi') %>% 
-  dplyr::rename(country = ctry) %>% 
-  dplyr::filter(rowSums(is.na(.)) == 0)
-
-ml_do_all(data, 4, 'withinCtry/ml_gini_grid',
-          fig_legend = "Gini\nindex\nquintile",type = 'deaths',
-          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]")  
 
 
 ## GRID - DEATHS vs URBN TYPE -------------------------------------------------------------
@@ -3000,25 +3019,26 @@ data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","c
                       names_to = "variable", values_to = "value") %>% 
   dplyr::mutate(quintile = as.factor(quintile),
                 urbn_type = as.factor(urbn_type))
+data$country_name <- countrycode::countrycode(data$ctry, origin = "iso2c", destination = "country.name")
 
 # Plotting
 pl <- ggplot() +
   geom_point(
     data = data %>% 
-      dplyr::select(quintile, ctry, variable, value) %>% 
+      dplyr::select(quintile, country_name, variable, value) %>% 
       dplyr::filter(variable != 'urbn') %>% 
       dplyr::distinct(),
-    aes(y = factor(ctry), x = value, color = quintile), size = 2, alpha = 0.85) + 
+    aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) + 
   geom_point(
     data = data %>% 
-      dplyr::select(urbn_type, ctry, variable, value) %>% 
+      dplyr::select(urbn_type, country_name, variable, value) %>% 
       dplyr::filter(variable == 'urbn') %>% 
       dplyr::distinct(),
-    aes(y = factor(ctry), x = value, fill = urbn_type), shape = 21, size = 2) +
+    aes(y = factor(country_name), x = value, fill = urbn_type), shape = 21, size = 2) +
   facet_grid(. ~ variable, scales = 'free',
-             labeller = labeller(variable = c(income_medi = "Income\nper capita",
-                                              elderly_medi = "Elderly\nproportion",
-                                              urbn_medi = "Urban\ntype"))) +
+             labeller = labeller(variable = c(income = "Income\nper capita",
+                                              elderly = "Elderly\nproportion",
+                                              urbn = "Urban\ntype"))) +
   scale_color_manual(
     values = quintiles.color,
     name = "Quintile",
@@ -3029,11 +3049,11 @@ pl <- ggplot() +
     name = "Urban type",
     labels = urbn_type.labs
   ) +
-  labs(x = "Premature Deaths [Deaths per 1M inhabitants]", y = "") +
+  labs(x = "Premature Deaths [Population-Normalized]", y = "") +
   theme_minimal()
 
 ggsave(
-  file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,"_grid.pdf"), height = 10, width = 15, units = "cm",
+  file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,"_grid.pdf"), height = 13, width = 18, units = "cm",
   plot = pl
 )
 

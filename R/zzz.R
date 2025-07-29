@@ -169,6 +169,103 @@ count_cells_plot <- function(data, axis_title = '') {
   return(pl)
 }
 
+
+do_map_between_socioecon <- function(raster_filtered,
+                                    legend_color,
+                                    legend_labs,
+                                    legend_title,
+                                    plot_title) {
+  
+  pdf(paste0("figures/",plot_title), width = 11/2.54, height = 10/2.54)
+  par(mar = c(0,0,0,0), xpd = NA)
+  r <- raster::raster(raster_filtered)
+  terra::plot(r, 
+              col = legend_color, 
+              breaks = 1:5,
+              legend = FALSE, 
+              axes = FALSE, 
+              box = FALSE)
+  legend('bottom',
+         legend = legend_labs,
+         pch = 21,
+         pt.bg = legend_color,
+         pt.cex = 1,
+         bty = "n",
+         title = legend_title,
+         text.font = 1,
+         cex = legend.title.size.raster-0.2,
+         x.intersp = 1, y.intersp = 1.2,
+         horiz = TRUE)
+  dev.off()
+  
+}
+
+do_map_within_socioecon <- function(raster_filtered,
+                                    legend_color,
+                                    legend_labs,
+                                    legend_title,
+                                    plot_title) {
+  
+  # crop to income raster extent to speed up processing
+  countries_inc <- terra::crop(countries_vect, raster_filtered)
+  countries_inc <- terra::project(countries_inc, raster_filtered)
+  countries_iso <- countries_inc[, c("iso_a3")]
+  countries_iso <- countries_iso[!countries_iso$iso_a3 %in% c("ALA","DZA","GEO",
+                                                              "GRL","IOR","IRQ",
+                                                              "ISR","JOR","LBN",
+                                                              "LBY","MAR","RUS",
+                                                              "SYR","TUN","TUR"), ]
+  
+  # extract raster values by country
+  vals_by_country <- terra::extract(raster_filtered, countries_iso,
+                                    cells = TRUE, 
+                                    xy = TRUE
+  )
+  vals_by_country$iso_a3 <- countries_iso$iso_a3[vals_by_country$ID]
+  
+  # compute quintiles per country
+  vals_quintiles <- vals_by_country %>%
+    dplyr::filter(!is.na(value)) %>%
+    dplyr::group_by(iso_a3) %>%
+    dplyr::mutate(quintile = dplyr::ntile(value, 5)) %>%
+    dplyr::ungroup()
+  
+  # convert back to spatial points and rasterize 
+  spat_points <- terra::vect(vals_quintiles, geom = c("x", "y"), crs = terra::crs(raster_filtered))
+  quintile_raster <- terra::rasterize(spat_points, raster_filtered, field = "quintile")
+  
+  centroids <- terra::centroids(countries_iso)
+  
+  pdf(paste0("figures/",plot_title), width = 11/2.54, height = 10/2.54)
+  par(mar = c(0,0,0,0), xpd = NA)
+  r <- raster::raster(quintile_raster)
+  terra::plot(r, 
+              col = legend_color, 
+              breaks = 1:5,
+              legend = FALSE, 
+              axes = FALSE, 
+              box = FALSE)
+  terra::plot(countries_iso, 
+              add = TRUE, 
+              border = "black", 
+              lwd = 0.5)
+  # text(centroids, labels = countries_iso$iso_a3, cex = 0.6, font = 2)
+  legend('bottom',
+         legend = legend_labs,
+         pch = 21,
+         pt.bg = legend_color,
+         pt.cex = 1,
+         bty = "n",
+         title = legend_title,
+         text.font = 1,
+         cex = legend.title.size.raster-0.2,
+         x.intersp = 1, y.intersp = 1.2,
+         horiz = TRUE)
+  dev.off()
+  
+}
+
+
 agg.level_shape = c(16,15)
 agg.level_labs = c('n_grid' = '1km\u00B2 grid cell',
                    'n_nuts' = 'NUTS3')

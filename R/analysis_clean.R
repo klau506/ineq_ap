@@ -3023,34 +3023,67 @@ data$country_name <- countrycode::countrycode(data$ctry, origin = "iso2c", desti
 
 # Plotting
 pl <- ggplot() +
+  # income
   geom_point(
-    data = data %>% 
-      dplyr::select(quintile, country_name, variable, value) %>% 
-      dplyr::filter(variable != 'urbn') %>% 
+    data = data %>%
+      dplyr::select(quintile, country_name, variable, value) %>%
+      dplyr::filter(variable == 'income') %>%
       dplyr::distinct(),
-    aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) + 
+    aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) +
+  scale_color_manual(
+    values = quintiles_v.color,
+    name = "Income quintile",
+    labels = quintiles_v.labs
+  ) +
+  new_scale_colour() +
+  # elderly
+  geom_point(
+    data = data %>%
+      dplyr::select(quintile, country_name, variable, value) %>%
+      dplyr::filter(variable == 'elderly') %>%
+      dplyr::distinct(),
+    aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) +
+  scale_color_manual(
+    values = quintiles_v2.color,
+    name = "Elderly proportion\nquintile",
+    labels = quintiles_v2.labs
+  ) +
+  # settlement
   geom_point(
     data = data %>% 
       dplyr::select(urbn_type, country_name, variable, value) %>% 
       dplyr::filter(variable == 'urbn') %>% 
       dplyr::distinct(),
-    aes(y = factor(country_name), x = value, fill = urbn_type), shape = 21, size = 2) +
-  facet_grid(. ~ variable, scales = 'free',
-             labeller = labeller(variable = c(income = "Income\nper capita",
-                                              elderly = "Elderly\nproportion",
-                                              urbn = "Urban\ntype"))) +
-  scale_color_manual(
-    values = quintiles.color,
-    name = "Quintile",
-    labels = quintiles.labs
-  ) +
+    aes(y = factor(country_name), x = value, fill = urbn_type), size = 2, shape = 21) +
   scale_fill_manual(
     values = urbn_type.color,
-    name = "Urban type",
+    name = "Settlement type",
     labels = urbn_type.labs
   ) +
+  # rest of the plot
+  facet_grid(. ~ variable,
+             labeller = labeller(variable = c(income = "Income\nper capita",
+                                              elderly = "Elderly\nproportion",
+                                              urbn = "Settlement\ntype")),
+             scales = 'fixed') +
   labs(x = "Premature Deaths [Population-Normalized]", y = "") +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "white", color = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title = element_text(size = legend.title.size),
+    axis.title.y = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.text.size),
+    legend.text = element_text(size = legend.text.size),
+    legend.position = 'right'
+  )
 
 ggsave(
   file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,"_grid.pdf"), height = 13, width = 18, units = "cm",
@@ -3204,7 +3237,36 @@ ggsave(
 )
 
 
-## MAP income quintiles by grid cell
+# ==============================================================================
+#                               DISTRIBUTION MAPS                              #
+# ==============================================================================
+
+## MAP settlement type by grid cell -------------------------------------------
+urbn_raster_masked <- terra::classify(urbn_raster_combined_filtered,
+                                      rcl = matrix(c(0, NA), ncol = 2, byrow = TRUE))
+
+pdf(paste0("figures/","plot_grid_urb_quintiles.pdf"), width = 11/2.54, height = 10/2.54)
+par(mar = c(0,0,0,0), xpd = NA)
+r <- raster::raster(urbn_raster_masked)
+terra::plot(r, 
+            col = rev(urbn_type.color.num),
+            legend = FALSE, 
+            axes = FALSE, 
+            box = FALSE)
+legend('bottom',
+       legend = rev(urbn_type.labs.num),
+       pch = 21,
+       pt.bg = rev(urbn_type.color.num),
+       pt.cex = 1,
+       bty = "n",
+       title = "Settlement type",
+       text.font = 1,
+       cex = legend.title.size.raster-0.2,
+       x.intersp = 1, y.intersp = 1.2,
+       horiz = TRUE)
+dev.off()
+
+## MAP income quintiles by grid cell -------------------------------------------
 inc_pc_20152_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
 inc_values <- terra::values(inc_pc_20152_filtered)
 
@@ -3213,42 +3275,14 @@ quintile_raster <- inc_pc_20152_filtered
 terra::values(quintile_raster) <- quintiles
 names(quintile_raster) <- "quintile_inc"
 
-pdf("figures/plot_grid_inc_quintiles.pdf", width = 11/2.54, height = 10/2.54)
-par(mar = c(0,0,0,0), xpd = NA)
-r <- raster::raster(quintile_raster)
-terra::plot(r, 
-            col = quintiles_v.color, 
-            breaks = 1:5,
-            legend = FALSE, 
-            axes = FALSE, 
-            box = FALSE)
-legend('bottom',
-       legend = quintiles_v.labs,
-       pch = 21,
-       pt.bg = quintiles_v.color,
-       pt.cex = 1,
-       bty = "n",
-       title = "Income Quintile",
-       text.font = 1,
-       cex = legend.title.size.raster-0.2,
-       x.intersp = 1, y.intersp = 1.2,
-       horiz = TRUE)
-dev.off()
-
-legend.args=list(
-  legend = quintiles_v.labs,
-  pch = 21,
-  pt.bg = quintiles_v.color,
-  pt.cex = 1,
-  bty = "n",
-  text = "Income Quintile",
-  text.font = 1,
-  cex = legend.title.size.raster-0.1,
-  x.intersp = 1, y.intersp = 1.2
-)
+do_map_between_socioecon(quintile_raster,
+                         quintiles_v.color,
+                         quintiles_v.labs,
+                         "Income quintile",
+                         "plot_grid_inc_quintiles.pdf")
 
 
-## MAP income quintile in Urban grid cells
+## MAP income quintile in Urban grid cells -------------------------------------
 inc_pc_20152_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
 inc_values <- terra::values(inc_pc_20152_filtered)
 
@@ -3262,25 +3296,86 @@ urbn_mask <- urbn_raster_combined_filtered == 3 # only cities
 inc_pc_2015_CITIES_filtered <- terra::mask(quintile_raster, urbn_mask, maskvalues = 0, updatevalue = NA)
 names(inc_pc_2015_CITIES_filtered) <- "inc_cities"
 
-pdf("figures/plot_grid_inc_quintiles_cities.pdf", width = 11/2.54, height = 10/2.54)
-par(mar = c(0,0,0,0), xpd = NA)
-r <- raster::raster(inc_pc_2015_CITIES_filtered)
-terra::plot(r, 
-            col = quintiles_v.color, 
-            breaks = 1:5,
-            legend = FALSE, 
-            axes = FALSE, 
-            box = FALSE)
-legend('bottom',
-       legend = quintiles_v.labs,
-       pch = 21,
-       pt.bg = quintiles_v.color,
-       pt.cex = 1,
-       bty = "n",
-       title = "Income Quintile",
-       text.font = 1,
-       cex = legend.title.size.raster-0.2,
-       x.intersp = 1, y.intersp = 1.2,
-       horiz = TRUE)
-dev.off()
+do_map_between_socioecon(inc_pc_2015_CITIES_filtered,
+                         quintiles_v.color,
+                         quintiles_v.labs,
+                         "Income quintile",
+                         "plot_grid_inc_quintiles_cities.pdf")
+
+## MAP elderly quintiles by grid cell ------------------------------------------
+elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
+pop_elderly_values <- terra::values(elderly_raster_filtered)
+
+quintiles <- dplyr::ntile(pop_elderly_values, 5)
+quintile_raster <- elderly_raster_filtered
+terra::values(quintile_raster) <- quintiles
+names(quintile_raster) <- "quintile_eld"
+
+do_map_between_socioecon(quintile_raster,
+                         quintiles_v2.color,
+                         quintiles_v2.labs,
+                         "Elderly proprotion quintile",
+                         "plot_grid_eld_quintiles.pdf")
+
+## MAP elderly quintile in Urban grid cells -------------------------------------
+elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
+pop_elderly_values <- terra::values(elderly_raster_filtered)
+
+quintiles <- dplyr::ntile(pop_elderly_values, 5)
+quintile_raster <- elderly_raster_filtered
+terra::values(quintile_raster) <- quintiles
+names(quintile_raster) <- "quintile_eld"
+
+
+urbn_mask <- urbn_raster_combined_filtered == 3 # only cities
+elderly_CITIES_filtered <- terra::mask(quintile_raster, urbn_mask, maskvalues = 0, updatevalue = NA)
+names(elderly_CITIES_filtered) <- "eld_cities"
+
+do_map_between_socioecon(elderly_CITIES_filtered,
+                         quintiles_v2.color,
+                         quintiles_v2.labs,
+                         "Elderly proprotion quintile",
+                         "plot_grid_eld_quintiles_cities.pdf")
+
+## MAP elderly quintile in Rural grid cells -------------------------------------
+elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
+pop_elderly_values <- terra::values(elderly_raster_filtered)
+
+quintiles <- dplyr::ntile(pop_elderly_values, 5)
+quintile_raster <- elderly_raster_filtered
+terra::values(quintile_raster) <- quintiles
+names(quintile_raster) <- "quintile_eld"
+
+
+urbn_mask <- urbn_raster_combined_filtered == 1 # only rural
+elderly_RURAL_filtered <- terra::mask(quintile_raster, urbn_mask, maskvalues = 0, updatevalue = NA)
+names(elderly_RURAL_filtered) <- "eld_rural"
+
+do_map_between_socioecon(elderly_RURAL_filtered,
+                         quintiles_v2.color,
+                         quintiles_v2.labs,
+                         "Elderly proprotion quintile",
+                         "plot_grid_eld_quintiles_rural.pdf")
+
+
+## MAP within income quintiles by grid cell  ------------------------------------------
+raster_filtered <- inc_raster_filtered
+names(raster_filtered) = 'value'
+do_map_within_socioecon(
+  raster_filtered,
+  quintiles_v.color,
+  quintiles_v.labs,
+  'Income quintiles',
+  'plot_grid_wihtin_inc_quintiles.pdf'
+)
+## MAP within elderly quintiles by grid cell  ------------------------------------------
+raster_filtered <- elderly_raster_filtered
+names(raster_filtered) = 'value'
+do_map_within_socioecon(
+  raster_filtered,
+  quintiles_v2.color,
+  quintiles_v2.labs,
+  'Elderly proportion quintiles',
+  'plot_grid_wihtin_eld_quintiles.pdf'
+)
 

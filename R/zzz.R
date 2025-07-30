@@ -110,6 +110,147 @@ prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title 
 }
 
 
+#' do_plot_within
+#' 
+#' @param data dataset
+#' @param ox_label label for the OX axis
+#' @param type either 'grid' or 'nuts3'
+do_plot_within <- function(data, ox_label, type) {
+  
+  # nuts3
+  if (type != 'grid') {
+    pl <- ggplot() +
+      # income
+      geom_point(
+        data = data %>%
+          dplyr::select(quintile, country_name, variable, value) %>%
+          dplyr::filter(variable == 'income') %>%
+          dplyr::distinct(),
+        aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) +
+      scale_color_manual(
+        values = quintiles_v.color,
+        name = "Income quintile",
+        labels = quintiles_v.labs
+      ) +
+      new_scale_colour() +
+      # elderly
+      geom_point(
+        data = data %>%
+          dplyr::select(quintile, country_name, variable, value) %>%
+          dplyr::filter(variable == 'elderly') %>%
+          dplyr::distinct(),
+        aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) +
+      scale_color_manual(
+        values = quintiles_v2.color,
+        name = "Elderly proportion\nquintile",
+        labels = quintiles_v2.labs
+      ) +
+      # gini
+      geom_point(
+        data = data %>%
+          dplyr::select(quintile, country_name, variable, value) %>%
+          dplyr::filter(variable == 'gini') %>%
+          dplyr::distinct(),
+        aes(y = factor(country_name), x = value, fill = quintile), size = 2, shape = 21) +
+      scale_fill_manual(
+        values = quintiles_v3.color,
+        name = "Gini index\nquintile",
+        labels = quintiles_v3.labs
+      ) +
+      new_scale_fill() +
+      # settlement
+      geom_point(
+        data = data %>% 
+          dplyr::select(urbn_type, country_name, variable, value) %>% 
+          dplyr::filter(variable == 'urbn') %>% 
+          dplyr::distinct(),
+        aes(y = factor(country_name), x = value, fill = urbn_type), size = 2, shape = 21) +
+      scale_fill_manual(
+        values = urbn_type.color,
+        name = "Settlement type",
+        labels = urbn_type.labs
+      ) +
+      # rest of the plot
+      facet_grid(. ~ variable,
+                 labeller = labeller(variable = c(income = "Income\nper capita",
+                                                  elderly = "Elderly\nproportion",
+                                                  gini = "Gini index\n",
+                                                  urbn = "Settlement\ntype")),
+                 scales = 'fixed')
+  } else {
+    pl <- ggplot() +
+      # income
+      geom_point(
+        data = data %>%
+          dplyr::select(quintile, country_name, variable, value) %>%
+          dplyr::filter(variable == 'income') %>%
+          dplyr::distinct(),
+        aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) +
+      scale_color_manual(
+        values = quintiles_v.color,
+        name = "Income quintile",
+        labels = quintiles_v.labs
+      ) +
+      new_scale_colour() +
+      # elderly
+      geom_point(
+        data = data %>%
+          dplyr::select(quintile, country_name, variable, value) %>%
+          dplyr::filter(variable == 'elderly') %>%
+          dplyr::distinct(),
+        aes(y = factor(country_name), x = value, color = quintile), size = 2, alpha = 0.85) +
+      scale_color_manual(
+        values = quintiles_v2.color,
+        name = "Elderly proportion\nquintile",
+        labels = quintiles_v2.labs
+      ) +
+      # settlement
+      geom_point(
+        data = data %>% 
+          dplyr::select(urbn_type, country_name, variable, value) %>% 
+          dplyr::filter(variable == 'urbn') %>% 
+          dplyr::distinct(),
+        aes(y = factor(country_name), x = value, fill = urbn_type), size = 2, shape = 21) +
+      scale_fill_manual(
+        values = urbn_type.color,
+        name = "Settlement type",
+        labels = urbn_type.labs
+      ) +
+      # rest of the plot
+      facet_grid(. ~ variable,
+                 labeller = labeller(variable = c(income = "Income\nper capita",
+                                                  elderly = "Elderly\nproportion",
+                                                  urbn = "Settlement\ntype")),
+                 scales = 'fixed')
+  }
+  
+  pl <- pl +
+    labs(x = ox_label, y = "") +
+    guides(
+      color = guide_legend(override.aes = list(alpha = 1), order = 0),
+      fill = guide_legend(order = 3)
+    ) +
+    theme_minimal() +
+    theme(
+      panel.background = element_rect(fill = "white", color = "white"),
+      panel.grid.major = element_line(colour = "grey90"),
+      panel.ontop = FALSE,
+      strip.text = element_text(size = legend.text.size),
+      strip.background = element_blank(),
+      axis.title = element_text(size = legend.title.size),
+      axis.title.y = element_blank(),
+      axis.text = element_text(size = legend.text.size),
+      axis.ticks.y = element_blank(),
+      axis.line.y = element_blank(),
+      legend.key.size = unit(0.6, "cm"),
+      legend.title = element_text(size = legend.text.size),
+      legend.text = element_text(size = legend.text.size),
+      legend.position = 'right'
+    )
+  
+  return(pl)
+}
+
 # scientific formatter: 0 appears as "0" and we remove the extra 0s (e.g., 05+e04 is 5e+4)
 sci_formatter <- function(x) {
   sapply(x, function(val) {
@@ -125,8 +266,6 @@ sci_formatter <- function(x) {
     }
   })
 }
-
-
 
 
 count_cells_plot <- function(data, axis_title = '') {

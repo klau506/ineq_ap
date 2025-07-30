@@ -19,7 +19,7 @@ source("R/utils.R")
 source("R/zzz.R")
 
 # constants
-normalized <- T
+normalized <- F
 normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
 norm_grid_tag <- dplyr::if_else(normalized, '_norm', '')
 split_num <- 5 #10 deciles, 5 quintiles
@@ -409,7 +409,7 @@ if (normalized) {
                  cex.axis = legend.text.size.raster
                ),
                legend.args = list(
-                 text = 'Premature Deaths\n[Absolute number]',
+                 text = 'Premature deaths\n[absolute number]',
                  side = 3,
                  font = 1,
                  line = 0.5,
@@ -1796,7 +1796,7 @@ plot_grid_deaths_urbn <- prob_jitter_plot(deaths_grid_urbn_sample %>%
                                           legend_type = 'urbn_type',
                                           ox_text = dplyr::if_else(normalized,
                                                                    'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
-                                                                   'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
+                                                                   'Premature deaths [absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 plot_grid_deaths_urbn[[1]] <- plot_grid_deaths_urbn[[1]] +
   scale_x_continuous(labels = scales::scientific)
 plot_grid_deaths_urbn[[2]] <- plot_grid_deaths_urbn[[2]] +
@@ -1970,7 +1970,7 @@ plot_grid_deaths_income <- prob_jitter_plot(deaths_grid_income_sample %>%
                                             legend_type = 'quintiles',
                                             ox_text = dplyr::if_else(normalized,
                                                                      'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
-                                                                     'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
+                                                                     'Premature deaths [absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 ggsave(
   file = paste0("figures/plot_grid_deaths_income",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_income[[1]]
@@ -2121,7 +2121,7 @@ plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample 
                                                  legend_type = 'quintiles_v2',
                                                  ox_text = dplyr::if_else(normalized,
                                                                           'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
-                                                                          'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
+                                                                          'Premature deaths [absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 ggsave(
   file = paste0("figures/plot_grid_deaths_per_elderly",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_per_elderly[[1]]

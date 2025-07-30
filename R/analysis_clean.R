@@ -369,7 +369,7 @@ if (normalized) {
                  cex.axis = legend.text.size.raster
                ),
                legend.args = list(
-                 text = 'Premature Deaths\n[Population-Normalized]',
+                 text = 'Premature mortality\nrate [per grid cell]',
                  side = 3,
                  font = 1,
                  line = 0.5,
@@ -1750,14 +1750,24 @@ df_mort_urbn <- data.frame(pm_mort = pm.mort_values[valid_idx],
 
 df_mort_urbn_no0 <- df_mort_urbn[df_mort_urbn$pm_mort > 0,]
 df_mort_urbn_no0 <- df_mort_urbn_no0[df_mort_urbn_no0$urbn_type > 0,]
-df_mort_urbn_no0 <- unique(df_mort_urbn_no0)
+df_mort_urbn_no0 <- unique(df_mort_urbn_no0) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+  dplyr::group_by(ctry_names) %>%
+  dplyr::filter(dplyr::n_distinct(urbn_type) == 3) %>%
+  dplyr::ungroup()
 
 df_mort_urbn_no0$urbn_type <- factor(df_mort_urbn_no0$urbn_type, levels = c('3','2','1'))
 
 df_medi <- df_mort_urbn_no0 %>%
-  dplyr::group_by(urbn_type) %>%
-  dplyr::summarize(medi = mean(pm_mort)) %>% 
+  dplyr::group_by(urbn_type, ctry_names) %>%
+  dplyr::summarize(medi = median(pm_mort)) %>% 
   dplyr::ungroup()
+
+# check regionally if urban deaths > rural deaths
+df_check <- df_medi %>%
+  tidyr::pivot_wider(names_from = quintile, values_from = medi) %>%
+  dplyr::mutate(type3_gt_type1 = City > Rural) 
+  # dplyr::mutate(type3_type1_diff = type_3 - type_1)
 
 # plots ------------------------------------------------------------------------
 deaths_grid_urbn <- unique(df_mort_urbn_no0) %>% 
@@ -1785,7 +1795,7 @@ plot_grid_deaths_urbn <- prob_jitter_plot(deaths_grid_urbn_sample %>%
                                           legend_title = 'Urban type',
                                           legend_type = 'urbn_type',
                                           ox_text = dplyr::if_else(normalized,
-                                                                   'Premature deaths [Population-Normalized]',# per 1km\u00B2 grid cell]',
+                                                                   'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
                                                                    'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 plot_grid_deaths_urbn[[1]] <- plot_grid_deaths_urbn[[1]] +
   scale_x_continuous(labels = scales::scientific)
@@ -1857,6 +1867,51 @@ ggsave(
   plot = plot_urbntype_density
 )
 
+
+# ecf by country
+
+df_mort_urbn_no0_ctry <- df_mort_urbn_no0 %>% 
+  dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID')) %>% 
+  dplyr::mutate(country_name = countrycode::countrycode(ctry_code,
+                                                        origin = "iso2c", destination = "country.name"))
+
+pl <- ggplot(df_mort_urbn_no0_ctry, 
+             aes(x = pm_mort, color = factor(urbn_type))) +
+  stat_ecdf(size = 0.5) +
+  facet_wrap(. ~ country_name) +
+  scale_color_manual(
+    values = urbn_type.color.num,
+    name = "Settlement Type",
+    labels = urbn_type.labs.num
+  ) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA))) +
+  scale_x_continuous(labels = sci_formatter) +
+  theme_minimal() +
+  labs(y = "ECDF",
+       x = "Premature mortality rate [per grid cell]") +
+  theme(
+    panel.background = element_rect(fill = "white", color = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.title = element_text(size = legend.title.size),
+    axis.text = element_text(size = legend.text.size),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    legend.key.size = unit(0.6, "cm"),
+    legend.title = element_text(size = legend.title.size),
+    legend.text = element_text(size = legend.text.size),
+    legend.position = 'right'
+  )
+ggsave(
+  file = paste0("figures/plot_grid_mort_urbntype_facetCtry",norm_grid_tag,".pdf"), 
+  height = 17, width = 26, units = "cm",
+  plot = pl
+)
+
+
 ## GRID - Deaths vs INCOME -----------------------------------------------------
 # data processing --------------------------------------------------------------
 inc_pc_20152 <- terra::project(inc_pc_2015, pm.mort_raster2)
@@ -1914,7 +1969,7 @@ plot_grid_deaths_income <- prob_jitter_plot(deaths_grid_income_sample %>%
                                             legend_title = 'Income quintiles',
                                             legend_type = 'quintiles',
                                             ox_text = dplyr::if_else(normalized,
-                                                                     'Premature deaths [Population-Normalized]',# per 1km\u00B2 grid cell]',
+                                                                     'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
                                                                      'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 ggsave(
   file = paste0("figures/plot_grid_deaths_income",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
@@ -2065,7 +2120,7 @@ plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample 
                                                  legend_title = 'Elderly proportion\nquintiles', 
                                                  legend_type = 'quintiles_v2',
                                                  ox_text = dplyr::if_else(normalized,
-                                                                          'Premature deaths [Population-Normalized]',# per 1km\u00B2 grid cell]',
+                                                                          'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
                                                                           'Premature deaths [Absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 ggsave(
   file = paste0("figures/plot_grid_deaths_per_elderly",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
@@ -2960,7 +3015,7 @@ data <- deaths_income_medi %>%
 
 ml_do_all(data, 8, 'withinCtry/ml_income_grid',
           fig_legend = "Income\nper capita\nquintile",
-          fig_ox_label = "Premature Deaths [Population-Normalized]",
+          fig_ox_label = "Premature mortality rate [per grid cell]",
           fix = T, type = 'deaths')
 
 ## GRID - DEATHS vs ELDERLY --------------------------------------------------------------
@@ -2985,7 +3040,7 @@ data <- deaths_elderly_medi %>%
 
 ml_do_all(data, 3, 'withinCtry/ml_elderly_grid',
           fig_legend = "Elderly\nproportion\nquintile",
-          fig_ox_label = "Premature Deaths [Population-Normalized]",
+          fig_ox_label = "Premature mortality rate [per grid cell]",
           type = 'deaths')
 
 
@@ -3066,7 +3121,7 @@ pl <- ggplot() +
                                               elderly = "Elderly\nproportion",
                                               urbn = "Settlement\ntype")),
              scales = 'fixed') +
-  labs(x = "Premature Deaths [Population-Normalized]", y = "") +
+  labs(x = "Premature mortality rate [per grid cell]", y = "") +
   theme_minimal() +
   theme(
     panel.background = element_rect(fill = "white", color = "white"),

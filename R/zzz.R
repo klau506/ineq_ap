@@ -110,10 +110,12 @@ prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title 
 }
 
 
-# scientifc formatter: 0 appears as "0" and we remove the extra 0s (e.g., 05+e04 is 5e+4)
+# scientific formatter: 0 appears as "0" and we remove the extra 0s (e.g., 05+e04 is 5e+4)
 sci_formatter <- function(x) {
   sapply(x, function(val) {
-    if (val == 0) {
+    if (is.na(val)) {
+      NA
+    } else if (val == 0) {
       "0"
     } else {
       # format to scientific, then clean up exponent

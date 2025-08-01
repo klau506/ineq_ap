@@ -221,7 +221,9 @@ do_plot_within <- function(data, ox_label, type) {
                  labeller = labeller(variable = c(income = "Income\nper capita",
                                                   elderly = "Elderly\nproportion",
                                                   urbn = "Settlement\ntype")),
-                 scales = 'fixed')
+                 scales = 'fixed') +
+      # beautiful ox scale
+      scale_x_continuous(labels = sci_formatter2)
   }
   
   pl <- pl +
@@ -263,6 +265,24 @@ sci_formatter <- function(x) {
       formatted <- format(val, scientific = TRUE, digits = 1)
       formatted <- gsub("e([-+]?)(0+)([0-9]+)", "e\\1\\3", formatted)  # removes e+0, e-0, etc.
       formatted
+    }
+  })
+}
+
+
+# scientific formatter: 0 appears as "0" and we remove the extra 0s (e.g., 05+e04 is 5e+4)
+sci_formatter2 <- function(x) {
+  sapply(x, function(val) {
+    if (is.na(val)) {
+      NA
+    } else if (val == 0) {
+      "0"
+    } else {
+      # # format to scientific, then clean up exponent
+      # formatted <- format(val, scientific = TRUE, digits = 1)
+      # formatted <- gsub("e([-+]?)(0+)([0-9]+)", "e\\1\\3", formatted)  # removes e+0, e-0, etc.
+      # formatted
+      val
     }
   })
 }

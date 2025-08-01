@@ -2814,12 +2814,12 @@ data_list <- list(
 
 # Merge all datasets by quintile
 data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
-  dplyr::left_join(deaths_urbntype_medi %>%
+  dplyr::full_join(deaths_urbntype_medi %>%
                      dplyr::rename_with(~ "urbn", contains("medi")) %>% 
                      dplyr::mutate(urbn_type = as.factor(urbn_type)),
                    by = 'ctry'
   ) %>% 
-  dplyr::left_join(deaths_gini_medi %>%
+  dplyr::full_join(deaths_gini_medi %>%
                      dplyr::rename_with(~ "gini", contains("medi")),
                    by = 'ctry'
   ) %>% 
@@ -2860,7 +2860,7 @@ data <- ap_income_medi %>%
   dplyr::rename(country = ctry) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
 
-ml_do_all(data, 7, 'withinCtry/ml_income_grid',
+ml_do_all(data, 4, 'withinCtry/ml_income_grid',
           fig_legend = "Income\nper capita\nquintile",
           fig_ox_label = "PM2.5 concentration [ug/m3]",type = 'ap',
           fix = T)
@@ -2910,8 +2910,8 @@ data_list <- list(
 )
 
 # Merge all datasets by quintile
-data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
-  dplyr::left_join(ap_urbntype_medi %>%
+data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("quintile","ctry"))) %>%
+  dplyr::full_join(ap_urbntype_medi %>%
                      dplyr::rename_with(~ "urbn", contains("medi")) %>% 
                      dplyr::mutate(urbn_type = as.factor(urbn_type)),
                    by = 'ctry'
@@ -3009,8 +3009,8 @@ data_list <- list(
 )
 
 # Merge all datasets by quintile
-data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
-  dplyr::left_join(deaths_urbntype_medi %>%
+data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("quintile","ctry"))) %>%
+  dplyr::full_join(deaths_urbntype_medi %>%
                      dplyr::rename_with(~ "urbn", contains("medi")) %>% 
                      dplyr::mutate(urbn_type = as.factor(urbn_type)),
                    by = 'ctry'
@@ -3057,7 +3057,7 @@ pl <- plot_grid(
 # Save
 ggsave(paste0("figures/withinCtry/fig_ap_deaths_var_",yy,"_",split_num_tag,"_grid.pdf"),
        plot = pl,
-       width = 18, height = 25, units = "cm")
+       width = 20, height = 25, units = "cm")
 
 # ==============================================================================
 #                                  CELLS COUNT                                 #

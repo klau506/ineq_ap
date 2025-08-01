@@ -3347,3 +3347,86 @@ do_map_within_socioecon(
   'plot_grid_wihtin_eld_quintiles.pdf'
 )
 
+
+## MAP within AP by grid cell  -------------------------------------------------
+# crop to income raster extent to speed up processing
+countries_inc <- terra::crop(countries_vect, pm_raster2_europe2_filtered)
+countries_inc <- terra::project(countries_inc, pm_raster2_europe2_filtered)
+countries_iso <- countries_inc[, c("iso_a3")]
+countries_iso <- countries_iso[!countries_iso$iso_a3 %in% c("ALA","DZA","GEO",
+                                                            "GRL","IOR","IRQ",
+                                                            "ISR","JOR","LBN",
+                                                            "LBY","MAR","RUS",
+                                                            "SYR","TUN","UKR",
+                                                            "BLR"), ]
+
+# in relation to the median by ctry, which AP deviation from it, percentage-wise,
+# does each grid cell suffer?
+
+pm_raster2_europe2 <- terra::crop(pm_raster2_europe, extent_raster)
+
+# Filter out NA values directly on the rasters
+pm_raster2_europe2_filtered <- terra::mask(pm_raster2_europe2, pm_raster2_europe2, maskvalue = NA)
+
+# Convert the filtered rasters to data frames
+pm_values <- terra::values(pm_raster2_europe2_filtered)
+df_ap_ctry <- data.frame(pm_concentration = pm_values, 
+                         ctry_names = ctry_values) %>% 
+  dplyr::group_by(ctry_code) %>% 
+  dplyr::mutate(
+    country_median = median(layer, na.rm = TRUE),
+    layer_pct_median = ((layer - country_median) / country_median) * 100
+  ) %>%
+  dplyr::ungroup() %>% 
+  dplyr::mutate(layer_pct_median = dplyr::if_else(is.na(ctry_code), NA, layer_pct_median))
+
+pm_raster2_europe2_pct <- pm_raster2_europe2_filtered
+terra::values(pm_raster2_europe2_pct) = df_ap_ctry$layer_pct_median
+pm_raster2_europe2_pct[pm_raster2_europe2_pct  > 100] = 125
+
+# define palette
+n_colors <- 125
+breaks <- seq(-100, 125, length.out = n_colors)
+custom_palette <- colorRampPalette(c("#0C6291", "#E8DAB2", "#FF66CC"))(n_colors)
+
+zero_index <- which.min(abs(breaks))
+colors_left <- colorRampPalette(c("#0C6291", "#E8DAB2"))(zero_index)
+colors_right <- colorRampPalette(c("#E8DAB2", "#FF66CC"))(n_colors - zero_index + 1)
+custom_palette <- c(colors_left, colors_right[-1])
+
+# plot
+pdf("figures/plot_grid_wihtin_ap.pdf", width = 11/2.54, height = 10/2.54)
+par(mar = c(0,0,0,0))
+r <- raster::raster(pm_raster2_europe2_pct)
+terra::plot(r, 
+            col = custom_palette,
+            legend = FALSE, 
+            axes = FALSE, 
+            box = FALSE)
+terra::plot(countries_iso, 
+            add = TRUE, 
+            border = "black", 
+            lwd = 0.10)
+legend_ticks <- c(-100, -50, 0, 50, 100, raster::maxValue(r))
+legend_labels <- c("-100", "-50", "0", "50", "100", paste0(">100"))
+raster::plot(r, legend.only = TRUE,
+             col = custom_palette,
+             legend.width = 1,
+             legend.shrink = 0.65,
+             frame.plot = FALSE,
+             axis.args = list(
+               at = legend_ticks,
+               labels = legend_labels,
+               font = 1,
+               cex.axis = legend.text.size.raster
+             ),
+             legend.args = list(
+               text = 'PM2.5 relative\nexposure [%]',
+               side = 3,
+               font = 1,
+               line = 0.5,
+               cex = legend.title.size.raster
+             ))
+
+dev.off()
+

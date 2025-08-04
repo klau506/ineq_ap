@@ -578,6 +578,78 @@ do_map_within_socioecon <- function(raster_filtered,
 }
 
 
+do_map_within_socioecon_nuts3 <- function(data_sf,
+                                          legend_color,
+                                          legend_labs,
+                                          legend_title,
+                                          plot_title) {
+  
+  vals_quintiles <- data_sf %>% 
+    # compute median by country
+    dplyr::group_by(ctry) %>% 
+    dplyr::mutate(median_ctry = median(value, na.rm = T)) %>% 
+    dplyr::ungroup() %>% 
+    # compute quintiles per country
+    dplyr::group_by(ctry) %>%
+    dplyr::mutate(quintile = dplyr::ntile(value, 5)) %>%
+    dplyr::ungroup()
+  
+  vals_quintiles_sf <- sf::st_sf(vals_quintiles, geometry = vals_quintiles$geometry)
+  
+  # limit the extension of the sf object  
+  data_proj <- sf::st_transform(nuts3_plot_data, crs = 3035)
+  bbox <- sf::st_bbox(c(xmin = 2400000, xmax = 6500000,
+                        ymin = 1320000, ymax = 5650000),
+                      crs = sf::st_crs(3035)) %>%
+    sf::st_as_sfc()
+  data_filtered <- data_proj %>%
+    sf::st_filter(bbox)
+  
+  
+  bbox_new <- sf::st_bbox(data_filtered) # current bounding box
+  xrange <- bbox_new$xmax - bbox_new$xmin # range of x values
+  yrange <- bbox_new$ymax - bbox_new$ymin # range of y values
+  bbox_new[3] <- bbox_new[3] + (0.25 * xrange) # xmax - right
+  bbox_new[4] <- bbox_new[4] + (0.2 * yrange) # ymax - top
+  
+  bbox_new <- bbox_new %>%  # take the bounding box ...
+    sf::st_as_sfc() # ... and make it a sf polygon
+  
+  plot <- tm_shape(nuts3_plot_data,
+                   projection = "EPSG:3035",
+                   bbox = bbox_new
+  ) +
+    tm_fill("lightgrey") +
+    tm_shape(vals_quintiles_sf,
+             bbox = bbox_new) +
+    tm_polygons("quintile",
+                showNA = F,
+                title = legend_title,
+                palette = legend_color,
+                labels = legend_labs,
+                lwd = 0.1
+    ) +
+    tm_layout(
+      legend.position = c("right", "top"),
+      legend.bg.color = NA,
+      legend.bg.alpha = 0,
+      legend.title.size = legend.title.size.raster - 0.3,
+      legend.text.size = legend.title.size.raster - 0.4,
+      legend.just = "center",
+      legend.width = 0.5,
+      legend.height = 0.3,
+      frame = F
+    )
+  
+  tmap::tmap_save(tm = plot,
+                  paste0("figures/",plot_title),
+                  width = 4.3, height = 3.93, units = "cm", dpi = 300
+                  # width = 11/2.54, height = 10/2.54
+  )
+  
+  
+}
+
 agg.level_shape = c(16,15)
 agg.level_labs = c('n_grid' = '1km\u00B2 grid cell',
                    'n_nuts' = 'NUTS3')

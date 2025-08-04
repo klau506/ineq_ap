@@ -500,7 +500,7 @@ do_map_within_socioecon <- function(raster_filtered,
   terra::plot(countries_iso, 
               add = TRUE, 
               border = "black", 
-              lwd = 0.5)
+              lwd = 0.1)
   # text(centroids, labels = countries_iso$iso_a3, cex = 0.6, font = 2)
   legend('bottom',
          legend = legend_labs,

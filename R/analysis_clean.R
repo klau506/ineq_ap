@@ -3499,3 +3499,51 @@ raster::plot(r, legend.only = TRUE,
 dev.off()
 
 
+
+
+
+## MAP settlement type by NUTS3 region -------------------------------------------
+
+urbn_nuts3_combined_filtered <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(geo, urbn_type) %>% 
+  dplyr::distinct() %>% 
+  dplyr::left_join(
+    nuts3_plot_data %>%
+      dplyr::select(geo, geometry),
+    by = "geo"
+  )
+urbn_nuts3_combined_filtered_sf <- sf::st_sf(urbn_nuts3_combined_filtered, geometry = urbn_nuts3_combined_filtered$geometry)
+
+
+plot_urbtype <- tm_shape(nuts3_plot_data,
+                         projection = "EPSG:3035",
+                         xlim = c(2400000, 6500000),
+                         ylim = c(1320000, 5650000)
+) +
+  tm_fill("lightgrey") +
+  tm_shape(urbn_nuts3_combined_filtered_sf) +
+  tm_polygons("urbn_type",
+              showNA = F,
+              title = "Settlement type",
+              palette = urbn_type.color,
+              labels = urbn_type.labs,
+              lwd = 0.1
+  ) +
+  tm_layout(
+    legend.position = c("right", "top"),
+    legend.bg.color = NA,
+    legend.bg.alpha = 0,
+    legend.title.size = legend.title.size.raster - 0.3,
+    legend.text.size = legend.title.size.raster - 0.4,
+    legend.just = "center",
+    legend.width = 0.5,
+    legend.height = 0.3,
+    frame = F
+  )
+
+tmap::tmap_save(tm = plot_urbtype,
+                "figures/plot_nuts3_urb_quintiles.pdf",
+                width = 4.3, height = 3.93, units = "cm", dpi = 300
+                # width = 11/2.54, height = 10/2.54
+)
+

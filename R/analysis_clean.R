@@ -3547,3 +3547,68 @@ tmap::tmap_save(tm = plot_urbtype,
                 # width = 11/2.54, height = 10/2.54
 )
 
+
+## MAP income quintiles by NUTS3 region -------------------------------------------
+
+inc_nuts3_combined_filtered <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(geo, income) %>% 
+  dplyr::distinct() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(income, split_num))) %>% 
+  dplyr::left_join(
+    nuts3_plot_data %>%
+      dplyr::select(geo, geometry),
+    by = "geo"
+  )
+inc_nuts3_combined_filtered_sf <- sf::st_sf(inc_nuts3_combined_filtered, geometry = inc_nuts3_combined_filtered$geometry)
+
+
+do_map_between_socioecon_nuts3(inc_nuts3_combined_filtered_sf,
+                               quintiles.color,
+                               quintiles.labs,
+                               "Income quintiles",
+                               "plot_nuts3_inc_quintiles.pdf")
+
+## MAP eldery proportion quintiles by NUTS3 region -----------------------------
+
+eld_nuts3_combined_filtered <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(geo, per_elderly) %>% 
+  dplyr::distinct() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(per_elderly, split_num))) %>% 
+  dplyr::left_join(
+    nuts3_plot_data %>%
+      dplyr::select(geo, geometry),
+    by = "geo"
+  )
+eld_nuts3_combined_filtered_sf <- sf::st_sf(eld_nuts3_combined_filtered, geometry = eld_nuts3_combined_filtered$geometry)
+
+
+do_map_between_socioecon_nuts3(eld_nuts3_combined_filtered_sf,
+                               quintiles_v2.color,
+                               quintiles_v2.labs,
+                               "Elderly proportion\nquintiles",
+                               "plot_nuts3_eld_quintiles.pdf")
+
+
+## MAP gini index quintiles by NUTS3 region -----------------------------
+
+gini_nuts3_combined_filtered <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(geo, gini) %>% 
+  dplyr::distinct() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+  dplyr::mutate(quintile = as.factor(dplyr::ntile(gini, split_num))) %>% 
+  dplyr::left_join(
+    nuts3_plot_data %>%
+      dplyr::select(geo, geometry),
+    by = "geo"
+  )
+gini_nuts3_combined_filtered_sf <- sf::st_sf(gini_nuts3_combined_filtered, geometry = gini_nuts3_combined_filtered$geometry)
+
+
+do_map_between_socioecon_nuts3(gini_nuts3_combined_filtered_sf,
+                               quintiles_v3.color,
+                               quintiles_v3.labs,
+                               "Gini index\nquintiles",
+                               "plot_nuts3_gini_quintiles.pdf")
+

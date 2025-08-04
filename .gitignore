@@ -11,3 +11,4 @@ data/.Rhistory
 *.ipynb
 *.npy
 /figures - dummy
+/figures - torm

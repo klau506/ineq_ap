@@ -3445,12 +3445,13 @@ df_deaths_ctry <- data.frame(pm_concentration = deaths_values,
     layer_pct_median = ((layer - country_median) / country_median) * 100
   ) %>%
   dplyr::ungroup() %>% 
-  dplyr::mutate(layer_pct_median = dplyr::if_else(is.na(ctry_code), NA, layer_pct_median))
+  dplyr::mutate(layer_pct_median = dplyr::if_else(is.na(ctry_code) | is.infinite(layer_pct_median), 
+                                                  NA, layer_pct_median))
 
 pm.mort_raster_pct <- pm.mort_raster_filtered
 terra::values(pm.mort_raster_pct) = df_deaths_ctry$layer_pct_median
-# pm.mort_raster_pct[pm.mort_raster_pct  > 100] = 125
-pm.mort_raster_pct[pm.mort_raster_pct  > 100] = NA
+pm.mort_raster_pct[pm.mort_raster_pct  > 100] = 125
+# pm.mort_raster_pct[pm.mort_raster_pct  > 100] = NA
 
 # define palette
 n_colors <- 125

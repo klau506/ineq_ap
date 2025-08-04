@@ -46,8 +46,8 @@ spacing_factor = 0.5
 
 
 # NUTS3 data
-ap_socioecon_sf <- get(load('ap_socioecon_sf.RData'))
-deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths.RData'))
+ap_socioecon_sf <- get(load('ap_socioecon_sf2.RData'))
+deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths2.RData'))
 
 rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
@@ -1596,6 +1596,10 @@ df_ap_eld <- data.frame(pm_concentration = pm_values[valid_idx],
 df_ap_eld_no0 <- df_ap_eld[df_ap_eld$pm_concentration > 0,]
 df_ap_eld_no0 <- df_ap_eld_no0[df_ap_eld_no0$pop_elderly_per > 0,]
 df_ap_eld_no0 <- unique(df_ap_eld_no0) %>% 
+  dplyr::filter(!ctry_names %in% c(0,2,13,24,25,31)) %>% # remove Albania, Bosnia and Herzegovina, 
+                                     # Macedonia, North Macedonia, Montenegro, Serbia, and UK
+                                     # since not present in the elderly data (but
+                                     # border mismatch, so they appears)
   dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
   dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(pop_elderly_per, 5))) 
 
@@ -2103,6 +2107,10 @@ df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0.15e-4,]
 df_mort_eld_no0 <- df_mort_eld_no0[df_mort_eld_no0$pop_elderly_per > 0,]
 df_mort_eld_no0 <- unique(df_mort_eld_no0) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
+  dplyr::filter(!ctry_names %in% c(0,2,13,24,25,31)) %>% # remove Albania, Bosnia and Herzegovina, 
+  # Macedonia, North Macedonia, Montenegro, Serbia, and UK
+  # since not present in the elderly data (but
+  # border mismatch, so they appears)
   dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(pop_elderly_per, 5))) 
 
 binned_data <- df_mort_eld_no0 %>%
@@ -2492,7 +2500,7 @@ row3 <- gridExtra::arrangeGrob(
 pl_combined <- gridExtra::grid.arrange(row1, row2, row3, ncol = 1)
 
 ggsave(file=file.path(paste0('figures/plot_combined_GRID_noNorm.pdf')), 
-       plot = pl_combined, height = 15, width = 12)
+       plot = pl_combined, height = 13, width = 12)
 
 # NUTS3
 # settlement

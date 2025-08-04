@@ -1,3 +1,77 @@
+load_grid_data_urb <- function() {
+  urbn_raster2 <- terra::resample(urbn_raster, pm.ap_raster2)
+  urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
+  
+  # Define classification function
+  classify_function <- function(x) {
+    ifelse(x <= 10, 0, 
+           ifelse(x >= 11 & x <= 20, 1, # rural
+                  ifelse(x >= 21 & x <= 22, 2, # town/suburb
+                         ifelse(x >= 23 & x <= 30, 3, NA)))) # urban
+  }
+  
+  # Apply classification
+  urbn_raster_classified <- terra::app(urbn_raster2, classify_function)
+  names(urbn_raster_classified) <- "classification_layer"
+  urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
+  terra::plot(urbn_raster_combined$classification_layer)
+  
+  # Filter out NA values directly on the rasters
+  pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+  urbn_raster_filtered <- urbn_raster_combined$classification_layer
+  urbn_raster_combined_filtered <- terra::mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
+  
+  # Convert the filtered rasters to data frames
+  pm_values <- terra::values(pm.ap_raster_filtered)
+  urbn_values <- terra::values(urbn_raster_combined_filtered)
+  
+  
+  rr <- list(pm_values, urbn_values)
+  
+  return(rr)
+}
+
+
+load_grid_data_inc <- function() {
+  inc_pc_20152 <- terra::resample(inc_pc_2015, pm.ap_raster2)
+  inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
+  
+  # Filter out NA values directly on the rasters
+  pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+  inc_raster_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
+  
+  # Convert the filtered rasters to data frames
+  pm_values <- terra::values(pm.ap_raster_filtered)
+  inc_values <- terra::values(inc_raster_filtered)
+  
+  rr <- list(pm_values, inc_values)
+  
+  return(rr)
+}
+
+
+load_grid_data_eld <- function() {
+  pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
+  
+  pop_ge652 <- terra::project(pop_ge65, pm.ap_raster2)
+  pop_t2 <- terra::project(pop_t, pm.ap_raster2)
+  pop_ge652 <- terra::crop(pop_ge652, extent_raster)
+  pop_t2 <- terra::crop(pop_t2, extent_raster)
+  pop_elderly <- pop_ge652/pop_t2
+  
+  # Filter out NA values directly on the rasters
+  pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+  elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
+  
+  # Convert the filtered rasters to data frames
+  pm_values <- terra::values(pm.ap_raster_filtered)
+  pop_elderly <- terra::values(elderly_raster_filtered)
+  
+  rr <- list(pm_values, pop_elderly)
+  
+  return(rr)
+}
+
 
 
 prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title = '', 

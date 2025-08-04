@@ -1297,31 +1297,10 @@ deaths_geo_per_elderly %>%
 
 ## GRID - AP vs URBN_TYPE ------------------------------------------------------
 # data processing --------------------------------------------------------------
-urbn_raster2 <- terra::resample(urbn_raster, pm.ap_raster2)
-urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
+rr <- load_grid_data_urb()
 
-# Define classification function
-classify_function <- function(x) {
-  ifelse(x <= 10, 0, 
-         ifelse(x >= 11 & x <= 20, 1, # rural
-                ifelse(x >= 21 & x <= 22, 2, # town/suburb
-                       ifelse(x >= 23 & x <= 30, 3, NA)))) # urban
-}
-
-# Apply classification
-urbn_raster_classified <- terra::app(urbn_raster2, classify_function)
-names(urbn_raster_classified) <- "classification_layer"
-urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
-terra::plot(urbn_raster_combined$classification_layer)
-
-# Filter out NA values directly on the rasters
-pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
-urbn_raster_filtered <- urbn_raster_combined$classification_layer
-urbn_raster_combined_filtered <- terra::mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
-
-# Convert the filtered rasters to data frames
-pm_values <- terra::values(pm.ap_raster_filtered)
-urbn_values <- terra::values(urbn_raster_combined_filtered)
+pm_values <- rr[[1]]
+urbn_values <- rr[[2]]
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(urbn_values)
@@ -1332,6 +1311,20 @@ df_ap_urbn <- data.frame(pm_concentration = pm_values[valid_idx],
 df_ap_urbn_no0 <- df_ap_urbn[df_ap_urbn$pm_concentration > 0,]
 df_ap_urbn_no0 <- df_ap_urbn_no0[df_ap_urbn_no0$urbn_type > 0,]
 df_ap_urbn_no0 <- unique(df_ap_urbn_no0)
+
+# check nº of settlement cells of Denmark (ctry_value == 8) and Latvia (ctry_value == 22)
+df_ap_urbn_no0 %>% 
+  dplyr::filter(ctry_names == 8) %>% 
+  dplyr::group_by(urbn_type) %>% 
+  dplyr::summarise(percentage = 100 * dplyr::n() / nrow(.), .groups = "drop")
+
+df_ap_urbn_no0 %>% 
+  dplyr::group_by(ctry_names, urbn_type) %>%
+  dplyr::summarise(n = dplyr::n(), .groups = "drop_last") %>%
+  dplyr::mutate(percentage = 100 * n / sum(n)) %>%
+  dplyr::ungroup() %>% 
+  dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID')) -> a
+
 
 # plots  -----------------------------------------------------------------------
 ap_grid_urbn <- unique(df_ap_urbn_no0) %>% 
@@ -1452,16 +1445,10 @@ ggsave(
 
 ## GRID - AP vs INCOME ---------------------------------------------------------
 # data processing  -------------------------------------------------------------
-inc_pc_20152 <- terra::resample(inc_pc_2015, pm.ap_raster2)
-inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
+rr <- load_grid_data_inc()
 
-# Filter out NA values directly on the rasters
-pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
-inc_raster_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
-
-# Convert the filtered rasters to data frames
-pm_values <- terra::values(pm.ap_raster_filtered)
-inc_values <- terra::values(inc_raster_filtered)
+pm_values <- rr[[1]]
+inc_values <- rr[[2]]
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(inc_values)
@@ -1595,21 +1582,10 @@ ggsave(
 
 ## GRID - AP vs ELDERLY --------------------------------------------------------
 # data processing --------------------------------------------------------------
-pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
+rr <- load_grid_data_eld()
 
-pop_ge652 <- terra::project(pop_ge65, pm.ap_raster2)
-pop_t2 <- terra::project(pop_t, pm.ap_raster2)
-pop_ge652 <- terra::crop(pop_ge652, extent_raster)
-pop_t2 <- terra::crop(pop_t2, extent_raster)
-pop_elderly <- pop_ge652/pop_t2
-
-# Filter out NA values directly on the rasters
-pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
-elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
-
-# Convert the filtered rasters to data frames
-pm_values <- terra::values(pm.ap_raster_filtered)
-pop_elderly <- terra::values(elderly_raster_filtered)
+pm_values <- rr[[1]]
+pop_elderly <- rr[[2]]
 
 # Remove NA values
 valid_idx <- !is.na(pm_values) & !is.na(pop_elderly)

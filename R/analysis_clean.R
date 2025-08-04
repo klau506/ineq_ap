@@ -2523,34 +2523,34 @@ legend_gini <- gridExtra::arrangeGrob(get(load('figures/legend_gini_v.RData')), 
 sp = 0.15
 ss = 0.25
 
-vp_small <- viewport(width = 0.01, height = 0.01)
+vp_small <- grid::viewport(width = 0.01, height = 0.01)
 
-legend_urbn_grob <- grobTree(legend_urbn, vp = vp_small)
-legend_income_grob <- grobTree(legend_income, vp = vp_small)
-legend_elderly_grob <- grobTree(legend_elderly, vp = vp_small)
-legend_gini_grob <- grobTree(legend_gini, vp = vp_small)
+legend_urbn_grob <- grid::grobTree(legend_urbn, vp = vp_small)
+legend_income_grob <- grid::grobTree(legend_income, vp = vp_small)
+legend_elderly_grob <- grid::grobTree(legend_elderly, vp = vp_small)
+legend_gini_grob <- grid::grobTree(legend_gini, vp = vp_small)
 
-row1 <- arrangeGrob(
-  grob_a, grob_b, nullGrob(), legend_urbn_grob,
+row1 <- gridExtra::arrangeGrob(
+  grob_a, grob_b, grid::nullGrob(), legend_urbn_grob,
   ncol = 4,
-  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_urbn_grob))
+  widths = grid::unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_urbn_grob))
 )
-row2 <- arrangeGrob(
-  grob_c, grob_d, nullGrob(), legend_income_grob,
+row2 <- gridExtra::arrangeGrob(
+  grob_c, grob_d, grid::nullGrob(), legend_income_grob,
   ncol = 4,
-  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_income_grob))
+  widths = grid::unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_income_grob))
 )
-row3 <- arrangeGrob(
-  grob_e, grob_f, nullGrob(), legend_elderly_grob,
+row3 <- gridExtra::arrangeGrob(
+  grob_e, grob_f, grid::nullGrob(), legend_elderly_grob,
   ncol = 4,
-  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_elderly_grob))
+  widths = grid::unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_elderly_grob))
 )
-row4 <- arrangeGrob(
-  grob_g, grob_h, nullGrob(), legend_gini_grob,
+row4 <- gridExtra::arrangeGrob(
+  grob_g, grob_h, grid::nullGrob(), legend_gini_grob,
   ncol = 4,
-  widths = unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_gini_grob))
+  widths = grid::unit.c(unit(1, "null"), unit(1, "null"), unit(sp, "cm"), unit(ss, "grobwidth", legend_gini_grob))
 )
-pl_combined <- grid.arrange(row1, row2, row3, row4, ncol = 1)
+pl_combined <- gridExtra::grid.arrange(row1, row2, row3, row4, ncol = 1)
 
 ggsave(file=file.path(paste0('figures/plot_combined_NUTS3.pdf')), 
        plot = pl_combined, height = 20, width = 18)

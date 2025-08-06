@@ -2661,22 +2661,18 @@ data_list <- list(
   ap_income_medi %>%
     dplyr::rename_with(~ "income", contains("medi")),
   
-  # ap_gini_medi %>%
-  #   dplyr::rename_with(~ "gini", contains("medi")),
+  ap_gini_medi %>%
+    dplyr::rename_with(~ "gini", contains("medi")),
   
   ap_elderly_medi %>%
     dplyr::rename_with(~ "elderly", contains("medi"))
 )
 
 # Merge all datasets by quintile
-data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
-  dplyr::left_join(ap_urbntype_medi %>%
+data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("quintile","ctry"))) %>%
+  dplyr::full_join(ap_urbntype_medi %>%
                      dplyr::rename_with(~ "urbn", contains("medi")) %>% 
                      dplyr::mutate(urbn_type = as.factor(urbn_type)),
-                   by = 'ctry'
-  ) %>% 
-  dplyr::left_join(ap_gini_medi %>%
-                     dplyr::rename_with(~ "gini", contains("medi")),
                    by = 'ctry'
   ) %>% 
   tidyr::pivot_longer(cols = c(-quintile,-urbn_type,-ctry), 
@@ -2689,10 +2685,14 @@ data$variable <- factor(data$variable, levels = c("urbn", "income", "elderly", "
 
 
 # Plotting
-do_plot_within(data, "PM2.5 concentration [ug/m3]", type = 'nuts3')
+pl <- do_plot_within(data, "PM2.5 concentration [ug/m3]", type = 'nuts3')
 ggsave(
   file = paste0("figures/withinCtry/fig_ap_var_",yy,"_",split_num_tag,".pdf"), 
-  height = 12, width = 18, units = "cm",
+  height = 18, width = 18, units = "cm",
+  plot = pl
+)
+save(
+  file = paste0("figures/withinCtry/fig_ap_var_",yy,"_",split_num_tag,".RData"),
   plot = pl
 )
 
@@ -2789,22 +2789,18 @@ data_list <- list(
   deaths_income_medi %>%
     dplyr::rename_with(~ "income", contains("medi")),
   
-  # deaths_gini_medi %>%
-  #   dplyr::rename_with(~ "gini", contains("medi")),
+  deaths_gini_medi %>%
+    dplyr::rename_with(~ "gini", contains("medi")),
   
   deaths_elderly_medi %>%
     dplyr::rename_with(~ "elderly", contains("medi"))
 )
 
 # Merge all datasets by quintile
-data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","ctry"))) %>%
+data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("quintile","ctry"))) %>%
   dplyr::full_join(deaths_urbntype_medi %>%
                      dplyr::rename_with(~ "urbn", contains("medi")) %>% 
                      dplyr::mutate(urbn_type = as.factor(urbn_type)),
-                   by = 'ctry'
-  ) %>% 
-  dplyr::full_join(deaths_gini_medi %>%
-                     dplyr::rename_with(~ "gini", contains("medi")),
                    by = 'ctry'
   ) %>% 
   tidyr::pivot_longer(cols = c(-quintile,-urbn_type,-ctry), 
@@ -2816,13 +2812,41 @@ data <- purrr::reduce(data_list, function(x, y) merge(x, y, by = c("quintile","c
 data$variable <- factor(data$variable, levels = c("urbn", "income", "elderly", "gini"))
 
 # Plotting
-do_plot_within(data, "Premature Deaths [Deaths per 1M inhabitants]", type = 'nuts3')
+pl <- do_plot_within(data, "Premature Deaths [Deaths per 1M inhabitants]", type = 'nuts3')
 ggsave(
   file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,".pdf"), 
-  height = 12, width = 18, units = "cm",
+  height = 18, width = 18, units = "cm",
+  plot = pl
+)
+save(
+  file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,".RData"), 
   plot = pl
 )
 
+
+## AP - DEATHS - figure -------------------------------------------------
+pl_ap <- get(load(file = paste0("figures/withinCtry/fig_ap_var_",yy,"_",split_num_tag,".RData")))
+pl_deaths <- get(load(file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,".RData")))
+
+shared_legend <- get_legend(
+  pl_ap + theme(legend.position = "right")
+)
+pl_ap_noleg <- pl_ap + theme(legend.position = "none")
+pl_deaths_noleg <- pl_deaths + theme(legend.position = "none")
+pl <- plot_grid(
+  plot_grid(pl_ap_noleg, pl_deaths_noleg, 
+            ncol = 1, labels = c("a)", "b)"), 
+            label_x = 0, label_y = 1,
+            label_size = 10),
+  shared_legend,
+  rel_widths = c(1, 0.2),
+  ncol = 2
+)
+
+# Save
+ggsave(paste0("figures/withinCtry/fig_ap_deaths_var_",yy,"_",split_num_tag,"_nuts3.pdf"),
+       plot = pl,
+       width = 20, height = 25, units = "cm")
 
 ## GRID - AP vs INCOME ----------------------------------------------------------------
 ap_income_medi <- data.table::as.data.table(ap_grid_income_sample_ctry) %>%

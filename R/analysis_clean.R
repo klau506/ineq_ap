@@ -3678,3 +3678,102 @@ do_map_within_socioecon_nuts3(
   'Gini index\nquintiles',
   'plot_nuts3_wihtin_gini_quintiles.pdf'
 )
+
+## MAP within AP by NUTS3 region  -------------------------------------------------
+ap_nuts3_combined_filtered <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(geo, value = ap, ctry) %>% 
+  dplyr::distinct() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(
+    country_median = median(value, na.rm = TRUE),
+    layer_pct_median = ((value - country_median) / country_median) * 100
+  ) %>%
+  dplyr::ungroup() %>% 
+  dplyr::left_join(
+    nuts3_plot_data %>%
+      dplyr::select(geo, geometry),
+    by = "geo"
+  )
+ap_nuts3_combined_filtered_sf <- sf::st_sf(ap_nuts3_combined_filtered, geometry = ap_nuts3_combined_filtered$geometry)
+
+# plot
+plot <- ggplot() +
+  geom_sf(data = nuts3_plot_data, fill = "lightgrey", color = NA) +
+  geom_sf(data = ap_nuts3_combined_filtered_sf, 
+          aes(fill = layer_pct_median), 
+          color = "black",
+          size = 0.0001) + 
+  scale_fill_gradientn(
+    colours = c("#0C6291", "#E8DAB2", "#FF66CC"),
+    values = scales::rescale(c(-100, 0, 100)),
+    limits = c(min(ap_nuts3_combined_filtered_sf$layer_pct_median), max(ap_nuts3_combined_filtered_sf$layer_pct_median)),
+    name = "PM2.5 relative\nexposure [%]"
+  ) +
+  coord_sf(xlim = c(crop_xmin, crop_xmax), ylim = c(crop_ymin, crop_ymax)) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.justification = "top", 
+    legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(1.5, "cm"),
+    legend.title = element_text(size = legend.title.size, hjust = 0.5),
+    legend.text = element_text(size = legend.text.size),
+    panel.border = element_blank(), 
+    panel.background = element_rect(fill = "white", color = NA), 
+    panel.grid = element_blank(),
+    axis.text = element_blank()
+  )
+ggsave(plot,
+       filename = paste0("figures/plot_nuts3_wihtin_ap.pdf"),
+       width = 11, height = 10, units = "cm")
+
+
+## MAP within DEATHS by NUTS3 region  -------------------------------------------------
+deaths_nuts3_combined_filtered <- data.table::as.data.table(deaths_socioecon_sf) %>%
+  dplyr::select(geo, value = deaths, ctry) %>% 
+  dplyr::distinct() %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0) %>%
+  dplyr::group_by(ctry) %>% 
+  dplyr::mutate(
+    country_median = median(value, na.rm = TRUE),
+    layer_pct_median = ((value - country_median) / country_median) * 100
+  ) %>%
+  dplyr::ungroup() %>% 
+  dplyr::left_join(
+    nuts3_plot_data %>%
+      dplyr::select(geo, geometry),
+    by = "geo"
+  )
+deaths_nuts3_combined_filtered_sf <- sf::st_sf(deaths_nuts3_combined_filtered, geometry = deaths_nuts3_combined_filtered$geometry)
+
+# plot
+plot <- ggplot() +
+  geom_sf(data = nuts3_plot_data, fill = "lightgrey", color = NA) +
+  geom_sf(data = deaths_nuts3_combined_filtered_sf, 
+          aes(fill = layer_pct_median), 
+          color = "black",
+          size = 0.0001) + 
+  scale_fill_gradientn(
+    colours = c("#0C6291", "#E8DAB2", "#FF66CC"),
+    values = scales::rescale(c(-100, 0, 100)),
+    limits = c(min(deaths_nuts3_combined_filtered_sf$layer_pct_median), max(deaths_nuts3_combined_filtered_sf$layer_pct_median)),
+    name = "PM2.5 relative\nhealth impact [%]"
+  ) +
+  coord_sf(xlim = c(crop_xmin, crop_xmax), ylim = c(crop_ymin, crop_ymax)) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.justification = "top", 
+    legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(1.5, "cm"),
+    legend.title = element_text(size = legend.title.size, hjust = 0.5),
+    legend.text = element_text(size = legend.text.size),
+    panel.border = element_blank(), 
+    panel.background = element_rect(fill = "white", color = NA), 
+    panel.grid = element_blank(),
+    axis.text = element_blank()
+  )
+ggsave(plot,
+       filename = paste0("figures/plot_nuts3_wihtin_deaths.pdf"),
+       width = 11, height = 10, units = "cm")

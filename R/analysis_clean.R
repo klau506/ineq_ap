@@ -3416,7 +3416,7 @@ terra::plot(countries_iso,
             border = "black", 
             lwd = 0.10)
 legend_ticks <- c(-100, -50, 0, 50, 100, raster::maxValue(r))
-legend_labels <- c("-100", "-50", "0", "50", "100", paste0(">100"))
+legend_labels <- c("-100%", "-50%", "Ctry median", "+50%", "+100%", ">100%")
 raster::plot(r, legend.only = TRUE,
              col = custom_palette,
              legend.width = 1,
@@ -3501,7 +3501,7 @@ terra::plot(countries_iso,
             border = "black", 
             lwd = 0.10)
 legend_ticks <- c(-100, -50, 0, 50, 100, raster::maxValue(r))
-legend_labels <- c("-100", "-50", "0", "50", "100", paste0(">100"))
+legend_labels <- c("-100%", "-50%", "Ctry median", "+50%", "+100%", ">100%")
 raster::plot(r, legend.only = TRUE,
              col = custom_palette,
              legend.width = 1,
@@ -3722,6 +3722,10 @@ ap_nuts3_combined_filtered <- data.table::as.data.table(ap_socioecon_sf) %>%
 ap_nuts3_combined_filtered_sf <- sf::st_sf(ap_nuts3_combined_filtered, geometry = ap_nuts3_combined_filtered$geometry)
 
 # plot
+break_vals <- c(-100, -50, 0, 50, max(ap_nuts3_combined_filtered_sf$layer_pct_median))
+legend_labels <- c("-100%", "-50%", "Ctry median", "+50%", 
+                   paste0("+", round(max(ap_nuts3_combined_filtered_sf$layer_pct_median)), "%"))
+
 plot <- ggplot() +
   geom_sf(data = nuts3_plot_data, fill = "lightgrey", color = NA) +
   geom_sf(data = ap_nuts3_combined_filtered_sf, 
@@ -3731,6 +3735,8 @@ plot <- ggplot() +
   scale_fill_gradientn(
     colours = c("#0C6291", "#E8DAB2", "#FF66CC"),
     values = scales::rescale(c(-100, 0, 100)),
+    labels = legend_labels,
+    breaks = break_vals,
     limits = c(min(ap_nuts3_combined_filtered_sf$layer_pct_median), max(ap_nuts3_combined_filtered_sf$layer_pct_median)),
     name = "PM2.5 relative\nexposure [%]"
   ) +
@@ -3761,7 +3767,8 @@ deaths_nuts3_combined_filtered <- data.table::as.data.table(deaths_socioecon_sf)
   dplyr::group_by(ctry) %>% 
   dplyr::mutate(
     country_median = median(value, na.rm = TRUE),
-    layer_pct_median = ((value - country_median) / country_median) * 100
+    layer_pct_median = ((value - country_median) / country_median) * 100,
+    layer_pct_median = dplyr::if_else(country_median == 0, NA, layer_pct_median)
   ) %>%
   dplyr::ungroup() %>% 
   dplyr::left_join(
@@ -3772,6 +3779,9 @@ deaths_nuts3_combined_filtered <- data.table::as.data.table(deaths_socioecon_sf)
 deaths_nuts3_combined_filtered_sf <- sf::st_sf(deaths_nuts3_combined_filtered, geometry = deaths_nuts3_combined_filtered$geometry)
 
 # plot
+break_vals <- c(-100, -50, 0, 50, max(deaths_nuts3_combined_filtered_sf$layer_pct_median, na.rm = T))
+legend_labels <- c("-100%", "-50%", "Ctry median", "+50%", 
+                   paste0("+", round(max(deaths_nuts3_combined_filtered_sf$layer_pct_median, na.rm = T)), "%"))
 plot <- ggplot() +
   geom_sf(data = nuts3_plot_data, fill = "lightgrey", color = NA) +
   geom_sf(data = deaths_nuts3_combined_filtered_sf, 
@@ -3781,6 +3791,8 @@ plot <- ggplot() +
   scale_fill_gradientn(
     colours = c("#0C6291", "#E8DAB2", "#FF66CC"),
     values = scales::rescale(c(-100, 0, 100)),
+    breaks = break_vals,
+    labels = legend_labels,
     limits = c(min(deaths_nuts3_combined_filtered_sf$layer_pct_median), max(deaths_nuts3_combined_filtered_sf$layer_pct_median)),
     name = "PM2.5 relative\nhealth impact [%]"
   ) +

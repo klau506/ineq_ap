@@ -12,3 +12,6 @@ data/.Rhistory
 *.npy
 /figures - dummy
 /figures - torm
+R/data_preprocess_grid.R
+R/compare_ref.R
+R/check_rfasst_sectorial.R

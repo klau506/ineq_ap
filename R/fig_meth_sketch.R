@@ -26,7 +26,7 @@ rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>%
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
   dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
 
-ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_nuts.output.RData")) %>%
+ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData")) %>%
   dplyr::filter(year == yy)
 
 deaths <- get(load(paste0("data/rfasst_output/necp_m3_get_mort_pm25.output.RData"))) %>%
@@ -92,7 +92,7 @@ if (map) {
 
 
 # PM2.5 grid level
-pm25_weighted <- terra::rast("C:/Users/claudia.rodes/Documents/GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/Reference_vintage_eur_v2_2005_pm25_fin_weighted.tif")
+pm25_weighted <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
 png(filename = "figures/meth_sketch/plot_ap_grid_w.png",
     width = 100 * 3, height = 50 * 3, units = "mm", res = 300)
 terra::plot(pm25_weighted, col = grDevices::terrain.colors(50), axes = FALSE, box = FALSE, legend = FALSE)
@@ -100,7 +100,7 @@ dev.off()
 
 
 # PM2.5 regional level
-pm25_regional <- get(load("figures/meth_sketch/pm25.map_data.RData"))
+pm25_regional <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData"))
 
 pm25_regional <- as.data.frame(rmap::mapCountries) %>%
   dplyr::mutate(subRegionAlt=as.character(subRegionAlt)) %>%
@@ -179,87 +179,69 @@ if (map) {
 
 extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
 
-pm.pre <- terra::rast(paste0('../../GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/', 'Reference_vintage_eur_v2', '_', 2030,'_pm25_fin_weighted.tif'))
+pm.pre <- terra::rast(paste0('../../GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/EU_NECP_LTT_2030_pm25_fin_weighted.tif'))
 pm.pre <- terra::crop(pm.pre, extent_raster)
 
-pm.mort_yy <- get(load(paste0('../../GitHub/rfasst_v2/output/m3/pm25_gridded/EUR_grid/pm.mort_mat_2030_Reference_vintage_eur_v2.RData')))
+pm.mort_yy <- get(load(paste0('../../GitHub/rfasst_v2/output/m3/pm25_gridded/EUR_grid/pm.mort_mat_2030_norm_EU_NECP_LTT.RData')))
 vec <- as.vector(pm.mort_yy[['total']])
 pm.mort_rast <- terra::setValues(pm.pre, vec)
 
-plot <- tmap::tm_shape(pm.mort_rast, projection = "EPSG:3035") +
-  tmap::tm_raster(
-    palette = c("#D3D3D3", "#FFF9C4", "#FFEB3B", "#FF9800", "#e64602", "#ab0000", "#4d0073"),
-    breaks = c(0, 0.1, 0.25, 0.5, 0.75, 1, 2, max(na.omit(vec), na.rm = TRUE)),
-    title = "PM2.5 Attributable Mortality",
-    legend.show = TRUE
-  ) +
-  tmap::tm_layout(legend.show = FALSE, 
-                  legend.text.size = 0.2,
-                  legend.title.size = 0.3,
-                  frame = FALSE)
+eu_mask_raster <- terra::rast(terra::ext(eu_mask), resolution = 0.01)  # or define your own resolution
+eu_mask_raster2 <- terra::rasterize(eu_mask, eu_mask_raster, field = "iso_n3")
+eu_mask_raster2 <- terra::crop(eu_mask_raster2, extent_raster)
+eu_mask_raster2 <- terra::resample(eu_mask_raster2, pm.mort_rast)
 
-tmap::tmap_save(plot,
-                filename = paste0("figures/meth_sketch/plot_deaths_grid.pdf"),
-                width = 50, height = 50, units = "mm", dpi = 300)
+pm.mort_raster2_europe <- terra::mask(pm.mort_rast, eu_mask_raster2)
+
+pdf(paste0("figures/meth_sketch/plot_deaths_grid.pdf"), width = 50, height = 50)
+r <- raster::raster(pm.mort_raster2_europe)
+base_r <- raster::raster(eu_mask_raster2)
+colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
+par(mar = c(0, 0, 0, 0))
+raster::plot(base_r,
+             col = 'gray90',
+             legend = FALSE,
+             axes = FALSE,
+             box = FALSE,
+             useRaster = TRUE)
+raster::plot(r,
+             col = colors,
+             legend = FALSE,
+             axes = FALSE,
+             box = FALSE,
+             add = TRUE,
+             useRaster = TRUE)
+dev.off()
 
 ## AP vs urbn_type  ============================================================
-ap_urbntype_sf <- ap_socioecon_sf %>%
-  dplyr::filter(rowSums(is.na(.)) == 0) %>%
-  dplyr::select(geo, urbn_type, ap, geometry) %>% 
-  unique()
+ap_geo_urbn_type <- data.table::as.data.table(ap_socioecon_sf) %>%
+  dplyr::select(geo, urbn_type, ap)
+ap_geo_urbn_type <- unique(ap_geo_urbn_type) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, ap != 0) %>% 
+  dplyr::mutate(quintile = urbn_type) %>% 
+  dplyr::group_by(quintile) %>% 
+  dplyr::mutate(c05 = quantile(ap, 0.05),
+                c33 = quantile(ap, 0.33),
+                c50 = quantile(ap, 0.50),
+                c66 = quantile(ap, 0.66),
+                c95 = quantile(ap, 0.95)) %>% 
+  dplyr::ungroup()
 
-df <- data.table::as.data.table(ap_urbntype_sf) %>%
-  dplyr::select(-geometry)
-df_medi <- df[, .(medi = quantile(ap, 0.5, na.rm = T)),
-              by = c("urbn_type")
-]
+plot_ap_urbn_type <- prob_jitter_plot(ap_geo_urbn_type %>% 
+                                        dplyr::rename(item = ap), 
+                                      legend_title = 'Settlement type', 
+                                      legend_type = 'urbn_type',
+                                      ox_text = 'PM2.5 concentration [ug/m3]')
+ggsave(
+  file = paste0("figures/meth_sketch/plot_urbntype_density_ap_nuts3.pdf"), height = 5, width = 10, units = "cm",
+  plot = plot_ap_urbn_type[[1]] + theme(legend.position = 'none',
+                                        panel.border = element_blank(),
+                                        axis.title = element_blank()),
+  dpi = 300
+)
 
-df <- data.table::data.table(df)
 
-if (map) {
-  plot_urbntype_density <- ggplot(df) +
-    geom_density(
-      data = df, aes(
-        x = ap, group = urbn_type,
-        color = urbn_type, fill = urbn_type
-      ),
-      linewidth = 0.8, alpha = 0.25
-    ) +
-    geom_vline(aes(color = urbn_type, xintercept = medi),
-               data = df_medi, linewidth = 1
-    ) +
-    ggpubr::theme_pubr() +
-    scale_fill_manual(
-      values = urbn_type.color,
-      name = "Urban type",
-      labels = urbn_type.labs
-    ) +
-    scale_color_manual(
-      values = urbn_type.color,
-      name = "Urban type",
-      labels = urbn_type.labs
-    ) +
-    labs(x = "", y = "") +
-    theme(
-      panel.background = element_rect(fill = "white"),
-      panel.grid.major = element_line(colour = "grey90"),
-      panel.ontop = FALSE,
-      strip.text = element_text(size = 12),
-      strip.background = element_blank(),
-      axis.title.x = element_text(size = 12),
-      axis.text = element_text(size = 12),
-      legend.key.size = unit(1.5, "cm"),
-      legend.title = element_text(size = 12),
-      legend.text = element_text(size = 12),
-      legend.position = "None"
-    )
-  
-  ggsave(
-    file = paste0("figures/meth_sketch/plot_urbntype_density_ap.pdf"), height = 5, width = 10, units = "cm",
-    plot = plot_urbntype_density
-  )
-}
-
+# NOTE: grid figure in the analysis_clear.R script to avoid loading so much data here
 
 #### GCAM - EUR ================================================================
 # Load world map

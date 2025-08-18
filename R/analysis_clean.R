@@ -46,8 +46,8 @@ spacing_factor = 0.5
 
 
 # NUTS3 data
-ap_socioecon_sf <- get(load('ap_socioecon_sf2.RData'))
-deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths2.RData'))
+ap_socioecon_sf <- get(load('ap_socioecon_sf3.RData'))
+deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths3.RData'))
 
 rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
@@ -2679,7 +2679,11 @@ data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("q
                       names_to = "variable", values_to = "value") %>% 
   dplyr::mutate(quintile = as.factor(quintile),
                 urbn_type = as.factor(urbn_type)) %>% 
-  dplyr::mutate(country_name = countrycode::countrycode(ctry, origin = "iso2c", destination = "country.name")) %>% 
+  mutate(country_name = dplyr::case_when(
+    ctry == "EL" ~ "Greece",
+    ctry == "UK" ~ "United Kingdom",
+    TRUE ~ countrycode::countrycode(ctry, origin = "iso2c", destination = "country.name")
+  )) %>%
   dplyr::filter(country_name != 'Turkey') # not in EU+
 data$variable <- factor(data$variable, levels = c("urbn", "income", "elderly", "gini"))
 
@@ -2807,7 +2811,11 @@ data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("q
                       names_to = "variable", values_to = "value") %>% 
   dplyr::mutate(quintile = as.factor(quintile),
                 urbn_type = as.factor(urbn_type)) %>% 
-  dplyr::mutate(country_name = countrycode::countrycode(ctry, origin = "iso2c", destination = "country.name")) %>% 
+  mutate(country_name = dplyr::case_when(
+    ctry == "EL" ~ "Greece",
+    ctry == "UK" ~ "United Kingdom",
+    TRUE ~ countrycode::countrycode(ctry, origin = "iso2c", destination = "country.name")
+  )) %>%
   dplyr::filter(country_name != 'Turkey') # not in EU+
 data$variable <- factor(data$variable, levels = c("urbn", "income", "elderly", "gini"))
 

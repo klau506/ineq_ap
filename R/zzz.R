@@ -1,5 +1,18 @@
-load_grid_data_urb <- function() {
-  urbn_raster2 <- terra::resample(urbn_raster, pm.ap_raster2)
+
+#' load_grid_data_urb
+#' @description Load grided data resampled to ap or mortality estimates
+#' @param type either 'ap' or 'deaths'
+#' @return list with the pm impacts (concentration or premature mortalities) and the settlement data
+load_grid_data_urb <- function(type) {
+  if (type == 'ap') {
+    pm_raster2 = pm.ap_raster2
+  } else if (type == 'deaths') {
+    pm_raster2 = pm.mort_raster2
+  } else {
+    stop('`type` parameter not recognized. Only `ap` and `deaths` allowed.')
+  }
+  
+  urbn_raster2 <- terra::resample(urbn_raster, pm_raster2)
   urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
   
   # Define classification function
@@ -17,12 +30,12 @@ load_grid_data_urb <- function() {
   terra::plot(urbn_raster_combined$classification_layer)
   
   # Filter out NA values directly on the rasters
-  pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+  pm_raster_filtered <- terra::mask(pm_raster2, pm_raster2, maskvalue = NA)
   urbn_raster_filtered <- urbn_raster_combined$classification_layer
   urbn_raster_combined_filtered <- terra::mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
   
   # Convert the filtered rasters to data frames
-  pm_values <- terra::values(pm.ap_raster_filtered)
+  pm_values <- terra::values(pm_raster_filtered)
   urbn_values <- terra::values(urbn_raster_combined_filtered)
   
   
@@ -31,17 +44,27 @@ load_grid_data_urb <- function() {
   return(rr)
 }
 
-
-load_grid_data_inc <- function() {
-  inc_pc_20152 <- terra::resample(inc_pc_2015, pm.ap_raster2)
+#' load_grid_data_inc
+#' @description Load grided data resampled to ap or mortality estimates
+#' @param type either 'ap' or 'deaths'
+#' @return list with the pm impacts (concentration or premature mortalities) and the income data
+load_grid_data_inc <- function(type) {
+  if (type == 'ap') {
+    pm_raster2 = pm.ap_raster2
+  } else if (type == 'deaths') {
+    pm_raster2 = pm.mort_raster2
+  } else {
+    stop('`type` parameter not recognized. Only `ap` and `deaths` allowed.')
+  }
+  inc_pc_20152 <- terra::resample(inc_pc_2015, pm_raster2)
   inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
   
   # Filter out NA values directly on the rasters
-  pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+  pm_raster_filtered <- terra::mask(pm_raster2, pm_raster2, maskvalue = NA)
   inc_raster_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
   
   # Convert the filtered rasters to data frames
-  pm_values <- terra::values(pm.ap_raster_filtered)
+  pm_values <- terra::values(pm_raster_filtered)
   inc_values <- terra::values(inc_raster_filtered)
   
   rr <- list(pm_values, inc_values)
@@ -50,21 +73,31 @@ load_grid_data_inc <- function() {
 }
 
 
-load_grid_data_eld <- function() {
-  pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
+#' load_grid_data_eld
+#' @description Load grided data resampled to ap or mortality estimates
+#' @param type either 'ap' or 'deaths'
+#' @return list with the pm impacts (concentration or premature mortalities) and the elderly data
+load_grid_data_eld <- function(type) {
+  if (type == 'ap') {
+    pm_raster2 = pm.ap_raster2
+  } else if (type == 'deaths') {
+    pm_raster2 = pm.mort_raster2
+  } else {
+    stop('`type` parameter not recognized. Only `ap` and `deaths` allowed.')
+  }
   
-  pop_ge652 <- terra::project(pop_ge65, pm.ap_raster2)
-  pop_t2 <- terra::project(pop_t, pm.ap_raster2)
+  pop_ge652 <- terra::project(pop_ge65, pm_raster2)
+  pop_t2 <- terra::project(pop_t, pm_raster2)
   pop_ge652 <- terra::crop(pop_ge652, extent_raster)
   pop_t2 <- terra::crop(pop_t2, extent_raster)
   pop_elderly <- pop_ge652/pop_t2
   
   # Filter out NA values directly on the rasters
-  pm.ap_raster_filtered <- terra::mask(pm.ap_raster2, pm.ap_raster2, maskvalue = NA)
+  pm_raster_filtered <- terra::mask(pm_raster2, pm_raster2, maskvalue = NA)
   elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
   
   # Convert the filtered rasters to data frames
-  pm_values <- terra::values(pm.ap_raster_filtered)
+  pm_values <- terra::values(pm_raster_filtered)
   pop_elderly <- terra::values(elderly_raster_filtered)
   
   rr <- list(pm_values, pop_elderly)

@@ -1233,7 +1233,7 @@ deaths_geo_per_elderly %>%
 
 ## GRID - AP vs URBN_TYPE ------------------------------------------------------
 # data processing --------------------------------------------------------------
-rr <- load_grid_data_urb()
+rr <- load_grid_data_urb(type = 'ap')
 
 pm_values <- rr[[1]]
 urbn_values <- rr[[2]]
@@ -1381,7 +1381,7 @@ ggsave(
 
 ## GRID - AP vs INCOME ---------------------------------------------------------
 # data processing  -------------------------------------------------------------
-rr <- load_grid_data_inc()
+rr <- load_grid_data_inc(type = 'ap')
 
 pm_values <- rr[[1]]
 inc_values <- rr[[2]]
@@ -1518,7 +1518,7 @@ ggsave(
 
 ## GRID - AP vs ELDERLY --------------------------------------------------------
 # data processing --------------------------------------------------------------
-rr <- load_grid_data_eld()
+rr <- load_grid_data_eld(type = 'ap')
 
 pm_values <- rr[[1]]
 pop_elderly <- rr[[2]]
@@ -1661,35 +1661,14 @@ ggsave(
 
 ## GRID - Deaths vs URBN_TYPE --------------------------------------------------
 # data processing --------------------------------------------------------------
-urbn_raster2 <- terra::resample(urbn_raster, pm.mort_raster2)
-urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
+rr <- load_grid_data_urb(type = 'deaths')
 
-# Define classification function
-classify_function <- function(x) {
-  ifelse(x <= 10, 0, 
-         ifelse(x >= 11 & x <= 20, 1, # rural
-                ifelse(x >= 21 & x <= 22, 2, # town/suburb
-                       ifelse(x >= 23 & x <= 30, 3, NA)))) # urban
-}
-
-# Apply classification
-urbn_raster_classified <- terra::app(urbn_raster2, classify_function)
-names(urbn_raster_classified) <- "classification_layer"
-urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
-terra::plot(urbn_raster_combined$classification_layer)
-
-# Filter out NA values directly on the rasters
-pm.mort_raster_filtered <- terra::mask(pm.mort_raster2, pm.mort_raster2, maskvalue = NA)
-urbn_raster_filtered <- urbn_raster_combined$classification_layer
-urbn_raster_combined_filtered <- terra::mask(urbn_raster_filtered, urbn_raster_filtered, maskvalue = NA)
-
-# Convert the filtered rasters to data frames
-pm.mort_values <- terra::values(pm.mort_raster_filtered)
-urbn_values <- terra::values(urbn_raster_combined_filtered)
+pm_values <- rr[[1]]
+urbn_values <- rr[[2]]
 
 # Remove NA values
-valid_idx <- !is.na(pm.mort_values) & !is.na(urbn_values)
-df_mort_urbn <- data.frame(pm_mort = pm.mort_values[valid_idx],
+valid_idx <- !is.na(pm_values) & !is.na(urbn_values)
+df_mort_urbn <- data.frame(pm_mort = pm_values[valid_idx],
                            urbn_type = urbn_values[valid_idx],
                            ctry_names = ctry_values[valid_idx])
 
@@ -1861,21 +1840,14 @@ ggsave(
 
 ## GRID - Deaths vs INCOME -----------------------------------------------------
 # data processing --------------------------------------------------------------
-inc_pc_20152 <- terra::project(inc_pc_2015, pm.mort_raster2)
-inc_pc_20152 <- terra::resample(inc_pc_20152, pm.mort_raster2)
-inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
+rr <- load_grid_data_inc(type = 'deaths')
 
-# Filter out NA values directly on the rasters
-pm.mort_raster_filtered <- terra::mask(pm.mort_raster2, pm.mort_raster2, maskvalue = NA)
-inc_raster_filtered <- terra::mask(inc_pc_20152, inc_pc_20152, maskvalue = NA)
-
-# Convert the filtered rasters to data frames
-pm.mort_values <- terra::values(pm.mort_raster_filtered)
-inc_values <- terra::values(inc_raster_filtered)
+pm_values <- rr[[1]]
+inc_values <- rr[[2]]
 
 # Remove NA values
-valid_idx <- !is.na(pm.mort_values) & !is.na(inc_values)
-df_mort_inc <- data.frame(pm_mort = pm.mort_values[valid_idx],
+valid_idx <- !is.na(pm_values) & !is.na(inc_values)
+df_mort_inc <- data.frame(pm_mort = pm_values[valid_idx], 
                           inc_per_capita = inc_values[valid_idx],
                           ctry_names = ctry_values[valid_idx])
 
@@ -1884,6 +1856,7 @@ df_mort_inc_no0 <- df_mort_inc_no0[df_mort_inc_no0$inc_per_capita > 0,]
 df_mort_inc_no0 <- unique(df_mort_inc_no0) %>% 
   dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(inc_per_capita, 5))) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
+
 
 binned_data <- df_mort_inc_no0 %>%
   dplyr::mutate(quintile = as.factor(dplyr::ntile(inc_per_capita, 50000))) %>% 
@@ -2015,27 +1988,14 @@ ggsave(
 
 ## GRID - Deaths vs ELDERLY ----------------------------------------------------
 # data processing --------------------------------------------------------------
-pop_ge652 <- terra::project(pop_ge65, pm.mort_raster2)
-pop_ge652 <- terra::resample(pop_ge652, pm.mort_raster2)
-pop_ge652 <- terra::crop(pop_ge652, extent_raster)
+rr <- load_grid_data_eld(type = 'deaths')
 
-pop_t2 <- terra::project(pop_t, pm.mort_raster2)
-pop_t2 <- terra::resample(pop_t2, pm.mort_raster2)
-pop_t2 <- terra::crop(pop_t2, extent_raster)
-
-pop_elderly <- pop_ge652/pop_t2
-
-# Filter out NA values directly on the rasters
-pm.mort_raster_filtered <- terra::mask(pm.mort_raster2, pm.mort_raster2, maskvalue = NA)
-elderly_raster_filtered <- terra::mask(pop_elderly, pop_elderly, maskvalue = NA)
-
-# Convert the filtered rasters to data frames
-pm.mort_values <- terra::values(pm.mort_raster_filtered)
-pop_elderly <- terra::values(elderly_raster_filtered)
+pm_values <- rr[[1]]
+pop_elderly <- rr[[2]]
 
 # Remove NA values
-valid_idx <- !is.na(pm.mort_values) & !is.na(pop_elderly)
-df_mort_eld <- data.frame(pm_mort = pm.mort_values[valid_idx], 
+valid_idx <- !is.na(pm_values) & !is.na(pop_elderly)
+df_mort_eld <- data.frame(pm_mort = pm_values[valid_idx],
                           pop_elderly_per = pop_elderly[valid_idx],
                           ctry_names = ctry_values[valid_idx])
 

@@ -75,46 +75,6 @@ deaths_nuts3 <- deaths %>%
 deaths_nuts3_sf <- sf::st_sf(deaths_nuts3, geometry = deaths_nuts3$geometry)
 
 
-#### eurostat HDD-CDD nuts3 data ===============================================
-hdd_cdd <- eurostat::get_eurostat("nrg_chddr2_a") %>% # HDD & CDD NUTS3
-  dplyr::filter(grepl("2023", TIME_PERIOD)) %>%
-  tidyr::pivot_wider(names_from = "indic_nrg", values_from = "values") %>%
-  dplyr::mutate(
-    unit_CDD = "NR",
-    unit_HDD = "NR"
-  ) %>%
-  dplyr::select(geo, CDD, HDD, unit_CDD, unit_HDD)
-
-hdd_cdd_sf <- data.table::as.data.table(hdd_cdd) %>%
-  dplyr::left_join(
-    nuts3_plot_data %>%
-      dplyr::select(geo, geometry),
-    by = "geo"
-  )
-hdd_cdd_sf <- sf::st_sf(hdd_cdd_sf, geometry = hdd_cdd_sf$geometry)
-sf::st_write(hdd_cdd_sf, "data/tmp/hdd_cdd_sf.shp", append = FALSE)
-
-
-#### eurostat GDP nuts3 data ===============================================
-gdp <- eurostat::get_eurostat("nama_10r_3gdp") %>% # GDP NUTS3
-  dplyr::filter(unit == 'PPS_EU27_2020_HAB',
-                grepl("2021", TIME_PERIOD),
-                nchar(geo) == 5) %>%
-  dplyr::select(geo, gdp = values, unit_gdp = unit)
-
-gdp_sf <- data.table::as.data.table(gdp) %>%
-  dplyr::left_join(
-    nuts3_plot_data %>%
-      dplyr::select(geo, geometry),
-    by = "geo"
-  )
-gdp_sf <- sf::st_sf(gdp_sf, geometry = gdp_sf$geometry)
-sf::st_write(gdp_sf, "data/tmp/gdp_sf.shp", append = FALSE)
-
-
-
-
-
 #### eurostat urbn-type data ===================================================
 # Source: https://ec.europa.eu/eurostat/web/rural-development/methodology, NUTS-2021
 urbn_type <- xlsx::read.xlsx('data/NUTS2021.xlsx', sheetName = 'Urban-rural') %>% 
@@ -175,7 +135,8 @@ nuts3_with_inc <- dplyr::bind_cols(nuts3_plot_data, inc_sum[,2,drop = F], pop_su
 
 # compute inc_pc by nuts3
 nuts3_with_inc <- nuts3_with_inc %>% 
-  dplyr::mutate(inc_pc_nuts3 = inc_nuts3 / pop_nuts3)
+  dplyr::mutate(inc_pc_nuts3 = inc_nuts3 / pop_nuts3) %>% 
+  dplyr::filter(!CNTR_CODE %in% c('AL','RS','MK','ME')) # remove countries with population missing data
 
 sf::st_write(nuts3_with_inc, "data/tmp/nuts3_with_inc.shp", append = FALSE)
 
@@ -237,31 +198,6 @@ sf::st_write(harm_data_sf, "data/tmp/harm_data_sf.shp", append = FALSE)
 #                                 PLOT INDICATORS                              #
 # ==============================================================================
 
-#### GDP =======================================================================
-plot_gdp <- tm_shape(nuts3_plot_data,
-                        projection = "EPSG:3035",
-                        xlim = c(2400000, 6500000),
-                        ylim = c(1320000, 5650000)
-) +
-  tm_fill("lightgrey") +
-  tm_shape(gdp_sf %>%
-             dplyr::select(gdp, geometry) %>%
-             dplyr::filter(rowSums(is.na(.)) == 0,
-                           gdp <= 80000) %>% 
-             dplyr::filter(!st_is_empty(geometry))) +
-  tm_polygons("gdp",
-              title = "GDPpc\n[2020 PPP EU27 €]",
-              palette = "Oranges",
-              style = "cont"
-  ) +
-  tm_layout(legend.title.size = 0.8) +
-  tm_layout(legend.text.size = 0.6)
-
-tmap::tmap_save(plot_gdp,
-                filename = "figures/plot_gdp.pdf",
-                width = 100, height = 100, units = "mm", dpi = 300
-)
-
 #### DISPOSABLE INCOME ==================================================
 nuts3_with_inc_sf <- sf::st_sf(nuts3_with_inc, geometry = nuts3_with_inc$geometry)
 
@@ -313,7 +249,7 @@ plot_gini <- tm_shape(nuts3_plot_data,
   ylim = c(1320000, 5650000)
 ) +
   tm_fill("lightgrey") +
-  tm_shape(harm_data_nuts3_sf %>%
+  tm_shape(harm_data_gini_nuts3_sf %>%
     dplyr::select(Gini_nuts3, geometry) %>%
     dplyr::filter(rowSums(is.na(.)) == 0)) +
   tm_polygons("Gini_nuts3",
@@ -415,41 +351,6 @@ tmap::tmap_save(plot_urbtype,
 )
 
 
-#### CDD (very hot days when cooling is needed) ================================
-
-grid_sf_cdd_v2 <- hdd_cdd %>%
-  dplyr::filter(nchar(geo) == 5) %>% # only NUTS3
-  dplyr::select(-starts_with("unit")) %>%
-  dplyr::left_join(
-    nuts3_plot_data %>%
-      dplyr::select(geo, geometry),
-    by = "geo"
-  )
-grid_sf_cdd_v2 <- sf::st_sf(grid_sf_cdd_v2, geometry = grid_sf_cdd_v2$geometry)
-
-
-plot_cdd <- tm_shape(nuts3_plot_data,
-  projection = "EPSG:3035",
-  xlim = c(2400000, 6500000),
-  ylim = c(1320000, 5650000)
-) +
-  tm_fill("lightgrey") +
-  tm_shape(grid_sf_cdd_v2) +
-  tm_polygons("CDD",
-    title = "CDD [NR]",
-    palette = "Oranges",
-    style = "cont"
-  ) +
-  tm_layout(legend.title.size = 0.8) +
-  tm_layout(legend.text.size = 0.6)
-
-tmap::tmap_save(plot_cdd,
-  filename = "figures/plot_cdd.pdf",
-  width = 100, height = 100, units = "mm", dpi = 300
-)
-
-
-
 # ==============================================================================
 #                                   JOIN DATA                                  #
 # ==============================================================================
@@ -457,10 +358,6 @@ tmap::tmap_save(plot_cdd,
 
 
 harm_socioeconomic_nuts_sf <- data.table::as.data.table(urbn_type) %>%
-  # dplyr::full_join(data.table::as.data.table(grid_sf_cdd_v2) %>%
-  #   dplyr::select(-geometry), by = "geo") %>%
-  # dplyr::full_join(data.table::as.data.table(gdp_sf) %>%
-  #   dplyr::select(geo, gdp), by = "geo") %>%
   dplyr::full_join(data.table::as.data.table(grid_sf_elderly_v3) %>%
                      dplyr::filter(year == 2020) %>% 
                      dplyr::select(geo, sex, per_elderly), 
@@ -499,7 +396,7 @@ ap_socioecon_sf <- sf::st_intersection(
     dplyr::select(ap, ctry = CNTR_CODE, geometry) %>% 
     unique()
 )
-save(ap_socioecon_sf, file = 'ap_socioecon_sf2.RData')
+save(ap_socioecon_sf, file = 'ap_socioecon_sf3.RData')
 
 ## DEATHS vs socioeconomic DATA ====================================================
 # merge DEATHS & socioeconomic data
@@ -517,4 +414,4 @@ b = deaths_nuts3_sf %>%
 deaths_socioecon_sf <- sf::st_intersection(
   a,b
 )
-save(deaths_socioecon_sf, file = 'deaths_socioecon_sf_newdeaths2.RData')
+save(deaths_socioecon_sf, file = 'deaths_socioecon_sf_newdeaths3.RData')

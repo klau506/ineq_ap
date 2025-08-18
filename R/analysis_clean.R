@@ -1262,7 +1262,8 @@ df_ap_urbn_no0 %>%
   dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID')) -> a
 
 
-# plots  -----------------------------------------------------------------------
+
+# groups and sample
 ap_grid_urbn <- unique(df_ap_urbn_no0) %>% 
   dplyr::rename(quintile = urbn_type,
                 ap = pm_concentration) %>% 
@@ -1294,6 +1295,7 @@ ap_grid_urbn_sample_ctry <- ap_grid_urbn %>%
   dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
 
+# plots  -----------------------------------------------------------------------
 plot_grid_ap_urbn <- prob_jitter_plot(data = ap_grid_urbn_sample %>% 
                                         dplyr::rename(item = ap), 
                                       legend_title = 'Urban type', 
@@ -1404,7 +1406,8 @@ binned_data <- df_ap_inc_no0 %>%
                    avg_pm_q = mean(pm_concentration)) %>% 
   dplyr::ungroup()
 
-# plots ------------------------------------------------------------------------
+
+# quintiles and sample
 ap_grid_income <- unique(df_ap_inc_no0) %>% 
   dplyr::rename(income = inc_per_capita,
                 quintile = quintile_5,
@@ -1427,6 +1430,7 @@ ap_grid_income_sample_ctry <- ap_grid_income %>%
   dplyr::ungroup() %>% 
   dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
+# plots ------------------------------------------------------------------------
 
 plot_grid_ap_income <- prob_jitter_plot(ap_grid_income_sample %>% 
                                         dplyr::rename(item = ap), 
@@ -1546,7 +1550,8 @@ binned_data <- df_ap_eld_no0 %>%
                    avg_pm_q = mean(pm_concentration)) %>% 
   dplyr::ungroup()
 
-# plots ------------------------------------------------------------------------
+
+# quintiles and sample
 ap_grid_per_elderly <- unique(df_ap_eld_no0) %>% 
   dplyr::rename(per_elderly = pop_elderly_per,
                 quintile = quintile_5,
@@ -1569,6 +1574,7 @@ ap_grid_per_elderly_sample_ctry <- ap_grid_per_elderly %>%
   dplyr::ungroup() %>% 
   dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
+# plots ------------------------------------------------------------------------
 plot_grid_ap_per_elderly <- prob_jitter_plot(ap_grid_per_elderly_sample %>% 
                                                dplyr::rename(item = ap), 
                                              legend_title = 'Elderly proportion\nquintiles', 
@@ -1684,7 +1690,8 @@ df_medi <- df_mort_urbn_no0 %>%
   dplyr::summarize(medi = median(pm_mort)) %>% 
   dplyr::ungroup()
 
-# plots ------------------------------------------------------------------------
+
+# groups and sample
 deaths_grid_urbn <- unique(df_mort_urbn_no0) %>% 
   dplyr::rename(quintile = urbn_type,
                 deaths = pm_mort) %>% 
@@ -1715,6 +1722,7 @@ deaths_grid_urbn_sample_ctry <- deaths_grid_urbn %>%
   dplyr::mutate(quintile = forcats::fct_relevel(quintile, 'City','Town/Suburb','Rural')) %>% 
   dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
+# plots ------------------------------------------------------------------------
 plot_grid_deaths_urbn <- prob_jitter_plot(deaths_grid_urbn_sample %>% 
                                             dplyr::rename(item = deaths) %>% 
                                             dplyr::filter(item < 4), 
@@ -1866,7 +1874,8 @@ binned_data <- df_mort_inc_no0 %>%
   dplyr::ungroup()
 
 
-# plots ------------------------------------------------------------------------
+
+# quintiles and sample
 deaths_grid_income <- unique(df_mort_inc_no0) %>% 
   dplyr::rename(income = inc_per_capita,
                 quintile = quintile_5,
@@ -1890,6 +1899,7 @@ deaths_grid_income_sample_ctry <- deaths_grid_income %>%
   dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
 
+# plots ------------------------------------------------------------------------
 plot_grid_deaths_income <- prob_jitter_plot(deaths_grid_income_sample %>% 
                                               dplyr::rename(item = deaths) %>% 
                                               dplyr::filter(item < 0.4), 
@@ -2016,7 +2026,7 @@ binned_data <- df_mort_eld_no0 %>%
                    avg_pm_q = mean(pm_mort)) %>% 
   dplyr::ungroup()
 
-# plots ------------------------------------------------------------------------
+# quintiles and sample
 deaths_grid_per_elderly <- unique(df_mort_eld_no0) %>% 
   dplyr::rename(per_elderly = pop_elderly_per,
                 quintile = quintile_5,
@@ -2039,6 +2049,7 @@ deaths_grid_per_elderly_sample_ctry <- deaths_grid_per_elderly %>%
   dplyr::ungroup() %>% 
   dplyr::left_join(ctry_raster_values_mapping, by = c('ctry_names' = 'ID'))
 
+# plots ------------------------------------------------------------------------
 plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample %>% 
                                                    dplyr::rename(item = deaths) %>% 
                                                    dplyr::filter(item < 0.5), 

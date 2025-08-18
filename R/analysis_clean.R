@@ -2,9 +2,6 @@
 ## 2.- Run this script to generate all the figures and additional plots to perform
 # the analysis presented in the main manuscript and the supplementary information
 
-################################################################################
-#                                LOAD DATA                                     #
-################################################################################
 # libraries
 require(eurostat)
 library(ggpattern)
@@ -19,6 +16,11 @@ library(cowplot)
 # helper scripts
 source("R/utils.R")
 source("R/zzz.R")
+
+
+################################################################################
+#                                LOAD DATA                                     #
+################################################################################
 
 # constants
 normalized <- T
@@ -45,7 +47,7 @@ scl <- 20
 spacing_factor = 0.5
 
 
-# NUTS3 data
+# NUTS3 data -------------------------------------------------------------------
 ap_socioecon_sf <- get(load('ap_socioecon_sf3.RData'))
 deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths3.RData'))
 
@@ -130,7 +132,9 @@ nuts3_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level 
 ctry_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 0, year = 2021) %>%
   dplyr::select(-FID)
 
-# GRID data
+
+
+# GRID data --------------------------------------------------------------------
 
 # download country boundaries (scale = "medium" is usually good enough)
 countries_sf <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
@@ -139,7 +143,7 @@ countries_vect <- terra::vect(countries_sf)
 
 # reference data
 extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
-pm.pre <- terra::rast(paste0('../../GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/', 'Reference_vintage_eur_v2', '_', 2030,'_pm25_fin_weighted.tif'))
+pm.pre <- terra::rast(paste0('data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif'))
 pm.pre <- terra::crop(pm.pre, extent_raster)
 
 europe_shp <- rnaturalearth::ne_countries(continent = "Europe", returnclass = "sf") %>% 
@@ -149,6 +153,11 @@ eu_mask <- terra::vect(europe_shp)
 eu_mask <- terra::crop(eu_mask, extent_raster)
 eu_mask[!is.na(eu_mask)] <- 1
 eu_mask[is.na(eu_mask)] <- 0
+
+eu_mask_raster <- terra::rast(terra::ext(eu_mask), resolution = 0.01)
+eu_mask_raster2 <- terra::rasterize(eu_mask, eu_mask_raster, field = "iso_n3")
+eu_mask_raster2 <- terra::crop(eu_mask_raster2, extent_raster)
+eu_mask_raster2 <- terra::resample(eu_mask_raster2, pm.pre)
 
 ctry_raster <- europe_shp %>% 
   dplyr::select(ctry_code = iso_a2_eh, geometry)
@@ -165,8 +174,12 @@ pop_ge65 <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-Y_G
 pop_t <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-T_2021_V2.tiff")
 
 pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
+pm.ap_raster2_europe <- terra::mask(pm.ap_raster2, eu_mask)
 vec <- as.vector(pm.mort_raster[['total']])
 pm.mort_raster <- terra::setValues(pm.ap_raster2, vec)
+pm.mort_raster2 <- terra::crop(pm.mort_raster2, extent_raster)
+pm.mort_raster2_europe <- terra::mask(pm.mort_raster2, eu_mask_raster2)
+
 
 ################################################################################
 #                                  PLOTS                                       #
@@ -236,14 +249,9 @@ print(tail(dat_rank))
 
 
 ## GRID - AP  -------------------------------------------------------------------------
-pm_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
-extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
-pm_raster2 <- terra::crop(pm_raster, extent_raster)
-pm_raster2_europe <- terra::mask(pm_raster2, eu_mask)
-
 pdf("figures/plot_grid_ap.pdf", width = 11/2.54, height = 10/2.54)
 par(mar = c(0,0,0,0))
-r <- raster::raster(pm_raster2_europe)
+r <- raster::raster(pm.ap_raster2_europe)
 terra::plot(r, 
             col = colorRampPalette(RColorBrewer::brewer.pal(9, "Blues"))(100), 
             legend = FALSE, 
@@ -327,17 +335,6 @@ print(tail(dat_rank))
 
 
 ## GRID - DEATHS  -------------------------------------------------------------------------
-pm.mort_raster <- get(load(paste0("data/rfasst_output/pm.mort_mat_2030",norm_grid_tag,"_EU_NECP_LTT2.RData"))); rm(pm.mort_yy); gc()
-pm.mort_raster2 <- terra::setValues(pm.pre, as.vector(pm.mort_raster[['total']]))
-pm.mort_raster2 <- terra::crop(pm.mort_raster2, extent_raster)
-
-eu_mask_raster <- terra::rast(terra::ext(eu_mask), resolution = 0.01)  # or define your own resolution
-eu_mask_raster2 <- terra::rasterize(eu_mask, eu_mask_raster, field = "iso_n3")
-eu_mask_raster2 <- terra::crop(eu_mask_raster2, extent_raster)
-eu_mask_raster2 <- terra::resample(eu_mask_raster2, pm.mort_raster2)
-
-pm.mort_raster2_europe <- terra::mask(pm.mort_raster2, eu_mask_raster2)
-
 filtered_raster <- pm.mort_raster2_europe
 filtered_raster[filtered_raster <= 0] <- NA
 filtered_raster[filtered_raster > 3.5] <- 3.5
@@ -1019,68 +1016,7 @@ ap_geo_per_elderly %>%
 
 
 
-## Deaths vs urbn_type1 -------------------------------------------------------------
-deaths_urbntype_sf <- deaths_socioecon_sf %>%
-  dplyr::select(geo, urbn_type, deaths, geometry) %>% 
-  dplyr::filter(rowSums(is.na(.)) == 0) %>%
-  unique()
-
-df <- data.table::as.data.table(deaths_urbntype_sf) %>%
-  dplyr::select(-geometry)
-df_medi <- df[, .(medi = quantile(deaths, 0.5, na.rm = T)),
-              by = c("urbn_type")
-]
-
-plot_urbntype_density <- ggplot(df) +
-  geom_density(
-    data = df, aes(
-      x = deaths, group = urbn_type,
-      color = urbn_type, fill = urbn_type
-    ),
-    linewidth = 0.8, alpha = 0.25
-  ) +
-  geom_vline(aes(color = urbn_type, xintercept = medi),
-             data = df_medi, linewidth = 1
-  ) +
-  facet_wrap(. ~ urbn_type, nrow = 3) +
-  ggpubr::theme_pubr() +
-  scale_fill_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  scale_color_manual(
-    values = urbn_type.color,
-    name = "Urban type",
-    labels = urbn_type.labs
-  ) +
-  labs(x = "Premature deaths [Deaths per 1M inhabitants]", y = "Probability density") +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title = element_text(size = legend.text.size),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    axis.text.y = element_blank(),
-    axis.ticks = element_blank(),
-    axis.line = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-    legend.position = "None"
-  )
-
-ggsave(
-  file = paste0("figures/plot_urbntype_density_deaths.pdf"), height = 12, width = 18, units = "cm",
-  plot = plot_urbntype_density
-)
-
-
-
-## Deaths vs urbn_type2 -------------------------------------------------------------
+## Deaths vs URBN_TYPE -------------------------------------------------------------
 spacing_factor = 0.5; scl = 25
 
 deaths_geo_urbn_type <- data.table::as.data.table(deaths_socioecon_sf) %>%
@@ -3379,7 +3315,7 @@ countries_iso <- countries_iso[!countries_iso$iso_a3 %in% c("ALA","DZA","GEO",
 # in relation to the median by ctry, which AP deviation from it, percentage-wise,
 # does each grid cell suffer?
 
-pm_raster2_europe2 <- terra::crop(pm_raster2_europe, extent_raster)
+pm_raster2_europe2 <- terra::crop(pm.ap_raster2_europe, extent_raster)
 
 # Filter out NA values directly on the rasters
 pm_raster2_europe2_filtered <- terra::mask(pm_raster2_europe2, pm_raster2_europe2, maskvalue = NA)

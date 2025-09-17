@@ -19,8 +19,8 @@ split_num_tag <- dplyr::if_else(split_num == 5, 'quintile',
                                 dplyr::if_else(split_num == 10, 'decile',
                                                paste0('split_num_',split_num)))
 ## rfasst + socioeconomid data =================================================
-ap_socioecon_sf <- get(load('ap_socioecon_sf.RData'))
-deaths_socioecon_sf <- get(load('deaths_socioecon_sf.RData'))
+ap_socioecon_sf <- get(load('ap_socioecon_sf3.RData'))
+deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths3.RData'))
 
 rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
@@ -49,12 +49,14 @@ if (normalized) {
 
 ## load spacial data ===========================================================
 nuts3_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>%
-  dplyr::select(-FID)
+  dplyr::select(-FID) %>% 
+  dplyr::filter(CNTR_CODE != 'TR')
 
 ## AP  =========================================================================
 ap_nuts3 <- ap %>%
   dplyr::filter(
-    nchar(region) > 3
+    nchar(region) > 3,
+    !stringr::str_detect(region, 'TR')
   ) %>%
   dplyr::rename(
     geo = region,
@@ -135,7 +137,8 @@ if (map) {
 ## DEATHS  =====================================================================
 deaths_nuts3 <- deaths %>%
   dplyr::filter(
-    nchar(region) > 3
+    nchar(region) > 3,
+    !stringr::str_detect(region, 'TR')
   ) %>%
   dplyr::rename(
     geo = region,

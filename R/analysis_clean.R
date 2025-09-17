@@ -48,8 +48,10 @@ spacing_factor = 0.5
 
 
 # NUTS3 data -------------------------------------------------------------------
-ap_socioecon_sf <- get(load('ap_socioecon_sf3.RData'))
-deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths3.RData'))
+ap_socioecon_sf <- get(load('ap_socioecon_sf3.RData')) %>% 
+  dplyr::filter(!stringr::str_detect(geo, 'TR'))
+deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths3.RData')) %>% 
+  dplyr::filter(!stringr::str_detect(geo, 'TR'))
 
 rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
   dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
@@ -128,9 +130,11 @@ if (normalized) {
 
 # mapping data
 nuts3_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>%
-  dplyr::select(-FID)
+  dplyr::select(-FID) %>% 
+  dplyr::filter(!CNTR_CODE %in% c('CY','TR'))
 ctry_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 0, year = 2021) %>%
-  dplyr::select(-FID)
+  dplyr::select(-FID) %>% 
+  dplyr::filter(!geo %in% c('CY','TR'))
 
 
 
@@ -138,6 +142,7 @@ ctry_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level =
 
 # download country boundaries (scale = "medium" is usually good enough)
 countries_sf <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+turkey <- countries_sf[countries_sf$name == "Turkey", ]
 # convert to SpatVector for terra
 countries_vect <- terra::vect(countries_sf)
 
@@ -147,8 +152,7 @@ pm.pre <- terra::rast(paste0('data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weigh
 pm.pre <- terra::crop(pm.pre, extent_raster)
 
 europe_shp <- rnaturalearth::ne_countries(continent = "Europe", returnclass = "sf") %>% 
-  dplyr::filter(!adm0_a3 %in% c('RUS','BLR','UKR')) %>% 
-  rbind(rnaturalearth::ne_countries(country = 'Turkey', returnclass = "sf"))
+  dplyr::filter(!adm0_a3 %in% c('RUS','BLR','UKR'))
 eu_mask <- terra::vect(europe_shp)
 eu_mask <- terra::crop(eu_mask, extent_raster)
 eu_mask[!is.na(eu_mask)] <- 1
@@ -177,7 +181,7 @@ pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
 pm.ap_raster2_europe <- terra::mask(pm.ap_raster2, eu_mask)
 vec <- as.vector(pm.mort_raster[['total']])
 pm.mort_raster <- terra::setValues(pm.ap_raster2, vec)
-pm.mort_raster2 <- terra::crop(pm.mort_raster2, extent_raster)
+pm.mort_raster2 <- terra::crop(pm.mort_raster, extent_raster)
 pm.mort_raster2_europe <- terra::mask(pm.mort_raster2, eu_mask_raster2)
 
 
@@ -342,7 +346,9 @@ filtered_raster[filtered_raster > 3.5] <- 3.5
 if (normalized) {
   pdf(paste0("figures/plot_grid_mort",norm_grid_tag,".pdf"), width = 11/2.54, height = 10/2.54)
   r <- raster::raster(filtered_raster)
+  r <- raster::mask(r, as(turkey, "Spatial"), inverse = TRUE) # remove Turkey from the map
   base_r <- raster::raster(eu_mask_raster2)
+  base_r <- raster::mask(base_r, as(turkey, "Spatial"), inverse = TRUE) # remove Turkey from the map
   colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
   par(mar = c(0, 0, 0, 0))
   raster::plot(base_r,
@@ -380,7 +386,9 @@ if (normalized) {
 } else {
   pdf(paste0("figures/plot_grid_mort",norm_grid_tag,".pdf"), width = 11/2.54, height = 10/2.54)
   r <- raster::raster(filtered_raster)
+  r <- raster::mask(r, as(turkey, "Spatial"), inverse = TRUE) # remove Turkey from the map
   base_r <- raster::raster(eu_mask_raster2)
+  base_r <- raster::mask(base_r, as(turkey, "Spatial"), inverse = TRUE) # remove Turkey from the map
   colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
   par(mar = c(0, 0, 0, 0))
   raster::plot(base_r,
@@ -584,7 +592,7 @@ deaths_ctryy <- deaths_ctry %>%
 
 deaths_ctry_sf <- sf::st_sf(deaths_ctryy, geometry = deaths_ctryy$geometry)
 
-deaths_ctry_sf$deaths[deaths_ctry_sf$deaths > 25] <- 25
+# deaths_ctry_sf$deaths[deaths_ctry_sf$deaths > 25] <- 25
 
 plot_deaths_gg <- ggplot() +
   geom_sf(data = ctry_plot_data, fill = "lightgrey", color = NA) +
@@ -2989,6 +2997,7 @@ ggsave(paste0("figures/withinCtry/fig_ap_deaths_var_",yy,"_",split_num_tag,"_gri
 ## GRID
 urbn_raster2 <- terra::resample(urbn_raster, pm.mort_raster2)
 urbn_raster2 <- terra::crop(urbn_raster2, extent_raster)
+urbn_raster2 <- terra::mask(urbn_raster2, pm.mort_raster2, maskvalue = NA)
 inc_pc_20152 <- terra::project(inc_pc_2015, pm.mort_raster2)
 inc_pc_20152 <- terra::resample(inc_pc_20152, pm.mort_raster2)
 inc_pc_20152 <- terra::crop(inc_pc_20152, extent_raster)
@@ -3139,11 +3148,16 @@ urbn_raster_masked <- terra::classify(urbn_raster_combined_filtered,
 pdf(paste0("figures/","plot_grid_urb_quintiles.pdf"), width = 11/2.54, height = 10/2.54)
 par(mar = c(0,0,0,0), xpd = NA)
 r <- raster::raster(urbn_raster_masked)
+r <- raster::mask(r, as(turkey, "Spatial"), inverse = TRUE) # remove Turkey from the map
 terra::plot(r, 
             col = rev(urbn_type.color.num),
             legend = FALSE, 
             axes = FALSE, 
             box = FALSE)
+terra::plot(countries_iso, 
+            add = TRUE, 
+            border = "black", 
+            lwd = 0.10)
 legend('bottom',
        legend = rev(urbn_type.labs.num),
        pch = 21,
@@ -3272,16 +3286,6 @@ do_map_within_socioecon(
 
 
 ## MAP within AP by grid cell  -------------------------------------------------
-# crop to income raster extent to speed up processing
-countries_inc <- terra::crop(countries_vect, pm_raster2_europe2_filtered)
-countries_inc <- terra::project(countries_inc, pm_raster2_europe2_filtered)
-countries_iso <- countries_inc[, c("iso_a3")]
-countries_iso <- countries_iso[!countries_iso$iso_a3 %in% c("ALA","DZA","GEO",
-                                                            "GRL","IOR","IRQ",
-                                                            "ISR","JOR","LBN",
-                                                            "LBY","MAR","RUS",
-                                                            "SYR","TUN","UKR",
-                                                            "BLR"), ]
 
 # in relation to the median by ctry, which AP deviation from it, percentage-wise,
 # does each grid cell suffer?
@@ -3354,7 +3358,7 @@ raster::plot(r, legend.only = TRUE,
 dev.off()
 
 
-## MAP within DEATHS by grid cell  -------------------------------------------------
+## MAP within --------------------------------------------------------------------
 # crop to income raster extent to speed up processing
 countries_inc <- terra::crop(countries_vect, pm_raster2_europe2_filtered)
 countries_inc <- terra::project(countries_inc, pm_raster2_europe2_filtered)
@@ -3364,7 +3368,9 @@ countries_iso <- countries_iso[!countries_iso$iso_a3 %in% c("ALA","DZA","GEO",
                                                             "ISR","JOR","LBN",
                                                             "LBY","MAR","RUS",
                                                             "SYR","TUN","UKR",
-                                                            "BLR"), ]
+                                                            "BLR","TUR","CYP"), ]
+
+## MAP within DEATHS by grid cell  -------------------------------------------------
 
 # in relation to the median by ctry, which AP deviation from it, percentage-wise,
 # does each grid cell suffer?

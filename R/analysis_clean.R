@@ -171,7 +171,7 @@ ctry_raster_values_mapping <- terra::cats(ctry_raster)[[1]]
 
 # rfasst and socioeconomic data
 pm.ap_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
-pm.mort_raster <- get(load(paste0("data/rfasst_output/pm.mort_mat_2030",norm_grid_tag,"_EU_NECP_LTT2.RData"))); rm(pm.mort_yy); gc()
+pm.mort_raster <- get(load(paste0("data/rfasst_output/pm.mort_mat_2030",norm_grid_tag,"_EU_NECP_LTT.RData"))); rm(pm.mort_yy); gc()
 inc_pc_2015 <- terra::rast("data/High-resolution_Downscaling/Europe_disp_inc_2015.tif")
 urbn_raster <- terra::rast("data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif")
 pop_ge65 <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-Y_GE65_2021_V2.tiff")

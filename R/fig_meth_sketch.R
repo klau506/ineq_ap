@@ -82,7 +82,7 @@ if (map) {
                 title = "PM2.5\n[ug/m3]",
                 palette = "Oranges",
                 style = "cont",
-                lwd = 0.2
+                lwd = 0.0001
     ) +
     tm_layout(legend.show = FALSE, frame = FALSE)
   
@@ -123,7 +123,7 @@ if (map) {
                 title = "PM2.5\n[ug/m3]",
                 palette = "Oranges",
                 style = "cont",
-                lwd = 0.2
+                lwd = 0.00001
     ) +
     tm_layout(legend.show = FALSE, frame = FALSE)
   
@@ -168,7 +168,7 @@ if (map) {
                 title = "Premature deaths\n[Deaths per 1M inhabitants]",
                 palette = "Oranges",
                 style = "cont",       
-                lwd = 0.2
+                lwd = 0.0001
     ) +
     tm_layout(legend.show = FALSE, frame = FALSE)
   

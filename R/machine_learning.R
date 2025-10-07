@@ -1,17 +1,22 @@
-library(dplyr)
+###############################################################################
 
-# # Example dataset (each row is a country, each column is a category)
-# set.seed(123)
-# data <- data.frame(
-#   country = paste0("Country_", 1:100),
-#   a = runif(100, 1, 100),
-#   b = runif(100, 1, 100),
-#   c = runif(100, 1, 100),
-#   d = runif(100, 1, 100),
-#   e = runif(100, 1, 100)
-# )
+# Study                 : Health impacts and socioeconomic inequalities of future outdoor air pollution in an NECP-compliant Europe
+# Date                  : Oct. 2025
+# Author                : Clàudia Rodés-Bachs
+# Institute             : BC3-Basque Centre for Climate Change
+# Description           : Helper script to load all necessary data
+# Re-usage instructions : Execute main.R, which will automatically run this script
+
+###############################################################################
 
 
+#' ml_clustering
+#' 
+#' @description ML clustering and dendograms creation algorithm
+#' @param data dataset
+#' @param cluster_number desired number of clusters
+#' @param fig_name name of the figure
+#' @param type 'ap' or 'deaths'
 ml_clustering <- function(data, cluster_number, fig_name, type) {
   # Convert each country's values to ranks
   ranked_data <- data %>%
@@ -46,9 +51,19 @@ ml_clustering <- function(data, cluster_number, fig_name, type) {
   return(data)
 }
 
+
+#' ml_do_all
+#' 
+#' @description function to run all the ML analysis
+#' @param data dataset
+#' @param cluster_number desired number of clusters
+#' @param fig_name name of the figure
+#' @param fig_legend figure's legend
+#' @param fig_ox_label figure's ox label
+#' @param type 'ap' or 'deaths'
 ml_do_all <- function(data, cluster_number, fig_name, 
                       fig_legend = NULL, fig_ox_label = NULL,
-                      fix = F, type = '') {
+                      type = '') {
   ml_data <- ml_clustering(data, cluster_number, fig_name, type)  
   
   to_analyze = ml_data %>% 
@@ -82,7 +97,6 @@ ml_do_all <- function(data, cluster_number, fig_name,
   
   
   data_ml_sf <- to_analyze %>% 
-    # dplyr::mutate(cluster = ifelse(cluster >= 3 & fix, cluster - 1, cluster)) %>%
     dplyr::left_join(
       nuts3_plot_data %>%
         dplyr::select(country = CNTR_CODE, geometry),

@@ -1,8 +1,14 @@
-## 1.- Run data_preprocess.R to obtain all the datasets used in this script
-## 2.- Run this script to generate all the figures and additional plots to perform
-# the analysis presented in the main manuscript and the supplementary information
 
-# libraries
+# Study                 : Health impacts and socioeconomic inequalities of future outdoor air pollution in an NECP-compliant Europe
+# Date                  : Oct. 2025
+# Author                : Clàudia Rodés-Bachs
+# Institute             : BC3-Basque Centre for Climate Change
+# Description           : Main script to produce the analysis and figures present in the Main and SI sections of the study 
+# Re-usage instructions : Execute this R script placing the data in the 'data' folder
+
+#################################### SET UP #################################### 
+
+# load libraries
 require(eurostat)
 library(ggpattern)
 library(ggplot2)
@@ -12,182 +18,33 @@ library(ggpubr)
 library(ggnewscale)
 library(patchwork)
 library(cowplot)
+tmap_options(check.and.fix = TRUE) 
 
-# helper scripts
+# source additional scripts
 source("R/utils.R")
 source("R/zzz.R")
+source('R/machine_learning.R')
+
+# create figures' directory
+if (!dir.exists('figures')) dir.create('figures')
 
 
-################################################################################
-#                                LOAD DATA                                     #
-################################################################################
+################################## LOAD DATA ################################### 
 
 # constants
 normalized <- T
-normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
-norm_grid_tag <- dplyr::if_else(normalized, '_norm', '')
 split_num <- 5 #10 deciles, 5 quintiles
-split_num_tag <- dplyr::if_else(split_num == 5, 'quintile', 
-                                dplyr::if_else(split_num == 10, 'decile',
-                                               paste0('split_num_',split_num)))
-sample_ctry_size <- 0.5
 
 map <- T #T if plotted and saved, F otherwise
 yy <- 2030
 
-crop_xmin <- -22
-crop_xmax <- 32
-crop_ymin <- 36
-crop_ymax <- 71
-legend.title.size <- 9
-legend.text.size <- 8
-legend.title.size.raster <- 0.6
-legend.text.size.raster <- 0.6
-scl <- 20
-spacing_factor = 0.5
+source("R/load_data.R")
 
+############################## METHODOLOGY SKETCH ############################## 
 
-# NUTS3 data -------------------------------------------------------------------
-ap_socioecon_sf <- get(load('ap_socioecon_sf3.RData')) %>% 
-  dplyr::filter(!stringr::str_detect(geo, 'TR'))
-deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths3.RData')) %>% 
-  dplyr::filter(!stringr::str_detect(geo, 'TR'))
+source("R/fig_meth_sketch.R")
 
-rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
-  dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
-  dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
-
-rfasst_ctry_pop <- rfasst::pop.all.ctry_ctry.str.SSP2 %>% 
-  dplyr::select(geo = region, year, age, sex, unit, pop = value)  
-
-ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData")) %>% 
-  dplyr::distinct()
-
-deaths <- get(load(paste0("data/rfasst_output/necp_m3_get_mort_pm25.output.RData"))) %>%
-  dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
-  dplyr::filter(sex == 'Both')
-
-run_validation(ap, deaths %>% 
-                 dplyr::group_by(region, year, scenario) %>% 
-                 dplyr::summarise(value = sum(value),
-                                  .groups = 'drop'),
-               yy = 2022 #2019, 2020, 2022
-)
-
-ap <- ap %>% 
-  dplyr::filter(year == yy)
-
-deaths <- deaths %>% 
-  dplyr::filter(year == yy)
-
-deaths_ctry <- deaths %>%
-  dplyr::filter(
-    nchar(region) > 3
-  ) %>%
-  dplyr::rename(
-    NUTS3 = region,
-    deaths = value
-  ) %>%
-  dplyr::left_join(rfasst::ctry_nuts3_codes %>% 
-                     dplyr::filter(ISO2 != 'TR') %>% 
-                     dplyr::distinct(),
-                   by = "NUTS3"
-  ) %>% 
-  dplyr::group_by(year, sex, scenario, region = ISO3) %>% 
-  dplyr::summarise(value = sum(deaths, na.rm = T)) %>% 
-  dplyr::ungroup()
-
-count_deaths <- sum(deaths_ctry$value)
-print(count_deaths)
-
-if (normalized) {
-  deaths <- deaths %>% 
-    dplyr::group_by(region, year, sex, scenario) %>% 
-    dplyr::summarise(value = sum(value)) %>% 
-    dplyr::ungroup() %>% 
-    dplyr::left_join(data.table::as.data.table(rfasst_pop) %>% 
-                       dplyr::filter(year == yy) %>%
-                       dplyr::group_by(region = geo, sex) %>% 
-                       dplyr::summarise(pop = sum(pop) * 1e6) %>% # popM was in million
-                       dplyr::ungroup(),
-                     by = c('region','sex')) %>% 
-    dplyr::mutate(value = value / pop * 1e6) %>% # deaths per 1000 habitants
-    dplyr::select(-pop)
-  
-  deaths_ctry <- deaths_ctry %>% 
-    dplyr::group_by(region, year, sex, scenario) %>% 
-    dplyr::summarise(value = sum(value)) %>% 
-    dplyr::ungroup() %>% 
-    dplyr::left_join(data.table::as.data.table(rfasst_ctry_pop) %>% 
-                       dplyr::filter(year == yy) %>%
-                       dplyr::group_by(region = geo, sex) %>% 
-                       dplyr::summarise(pop = sum(pop) * 1e6) %>% # popM was in million
-                       dplyr::ungroup(),
-                     by = c('region','sex')) %>% 
-    dplyr::mutate(value = value / pop * 1e6) %>% # deaths per 1000 habitants
-    dplyr::select(-pop)
-}
-
-# mapping data
-nuts3_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>%
-  dplyr::select(-FID) %>% 
-  dplyr::filter(!CNTR_CODE %in% c('CY','TR'))
-ctry_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 0, year = 2021) %>%
-  dplyr::select(-FID) %>% 
-  dplyr::filter(!geo %in% c('CY','TR'))
-
-
-
-# GRID data --------------------------------------------------------------------
-
-# download country boundaries (scale = "medium" is usually good enough)
-countries_sf <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
-turkey <- countries_sf[countries_sf$name == "Turkey", ]
-# convert to SpatVector for terra
-countries_vect <- terra::vect(countries_sf)
-
-# reference data
-extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
-pm.pre <- terra::rast(paste0('data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif'))
-pm.pre <- terra::crop(pm.pre, extent_raster)
-
-europe_shp <- rnaturalearth::ne_countries(continent = "Europe", returnclass = "sf") %>% 
-  dplyr::filter(!adm0_a3 %in% c('RUS','BLR','UKR'))
-eu_mask <- terra::vect(europe_shp)
-eu_mask <- terra::crop(eu_mask, extent_raster)
-eu_mask[!is.na(eu_mask)] <- 1
-eu_mask[is.na(eu_mask)] <- 0
-
-eu_mask_raster <- terra::rast(terra::ext(eu_mask), resolution = 0.01)
-eu_mask_raster2 <- terra::rasterize(eu_mask, eu_mask_raster, field = "iso_n3")
-eu_mask_raster2 <- terra::crop(eu_mask_raster2, extent_raster)
-eu_mask_raster2 <- terra::resample(eu_mask_raster2, pm.pre)
-
-ctry_raster <- europe_shp %>% 
-  dplyr::select(ctry_code = iso_a2_eh, geometry)
-ctry_raster <- terra::rasterize(ctry_raster, pm.pre, field = "ctry_code")
-ctry_values <- terra::values(ctry_raster)
-ctry_raster_values_mapping <- terra::cats(ctry_raster)[[1]]
-
-# rfasst and socioeconomic data
-pm.ap_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
-pm.mort_raster <- get(load(paste0("data/rfasst_output/pm.mort_mat_2030",norm_grid_tag,"_EU_NECP_LTT.RData"))); rm(pm.mort_yy); gc()
-inc_pc_2015 <- terra::rast("data/High-resolution_Downscaling/Europe_disp_inc_2015.tif")
-urbn_raster <- terra::rast("data/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0/GHS_SMOD_E2030_GLOBE_R2023A_54009_1000_V2_0_reproj2.tif")
-pop_ge65 <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-Y_GE65_2021_V2.tiff")
-pop_t <- terra::rast("data/Eurostat_Census-GRID_2021_V2-0/ESTAT_OBS-VALUE-T_2021_V2.tiff")
-
-pm.ap_raster2 <- terra::crop(pm.ap_raster, extent_raster)
-pm.ap_raster2_europe <- terra::mask(pm.ap_raster2, eu_mask)
-vec <- as.vector(pm.mort_raster[['total']])
-pm.mort_raster <- terra::setValues(pm.ap_raster2, vec)
-pm.mort_raster2 <- terra::crop(pm.mort_raster, extent_raster)
-pm.mort_raster2_europe <- terra::mask(pm.mort_raster2, eu_mask_raster2)
-
-
-################################################################################
-#                                  PLOTS                                       #
-################################################################################
+#################################### PLOTS #################################### 
 
 ## AP  -------------------------------------------------------------------------
 ap_nuts3 <- ap %>%
@@ -2480,10 +2337,8 @@ ggsave(file=file.path(paste0('figures/plot_combined_NUTS3.pdf')),
 
 
 
-# ==============================================================================
-#                              MACHINE LEARNING                                #
-# ==============================================================================
-source('R/machine_learning.R')
+
+############################### MACHINE LEARNING ############################### 
 
 ## AP vs INCOME ----------------------------------------------------------------
 ap_income_medi <- data.table::as.data.table(ap_socioecon_sf) %>%
@@ -2507,8 +2362,7 @@ data <- ap_income_medi %>%
 
 ml_do_all(data, 8, 'withinCtry/ml_income_nuts3',
           fig_legend = "Income\nper capita\nquintile",
-          fig_ox_label = "PM2.5 concentration [ug/m3]",type = 'ap',
-          fix = T)
+          fig_ox_label = "PM2.5 concentration [ug/m3]",type = 'ap')
 
 
 ## AP vs ELDERLY --------------------------------------------------------------
@@ -2640,7 +2494,7 @@ data <- deaths_income_medi %>%
 ml_do_all(data, 2, 'withinCtry/ml_income_nuts3',
           fig_legend = "Income\nper capita\nquintile",
           fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
-          fix = T, type = 'deaths')
+          type = 'deaths')
 
 
 ## DEATHS vs ELDERLY --------------------------------------------------------------
@@ -2793,8 +2647,7 @@ data <- ap_income_medi %>%
 
 ml_do_all(data, 4, 'withinCtry/ml_income_grid',
           fig_legend = "Income\nper capita\nquintile",
-          fig_ox_label = "PM2.5 concentration [ug/m3]",type = 'ap',
-          fix = T)
+          fig_ox_label = "PM2.5 concentration [ug/m3]",type = 'ap')
 
 
 ## GRID - AP vs ELDERLY --------------------------------------------------------------
@@ -2892,7 +2745,7 @@ data <- deaths_income_medi %>%
 ml_do_all(data, 8, 'withinCtry/ml_income_grid',
           fig_legend = "Income\nper capita\nquintile",
           fig_ox_label = "Premature mortality rate [per grid cell]",
-          fix = T, type = 'deaths')
+          type = 'deaths')
 
 ## GRID - DEATHS vs ELDERLY --------------------------------------------------------------
 deaths_elderly_medi <- data.table::as.data.table(deaths_grid_per_elderly_sample_ctry) %>%
@@ -2990,9 +2843,7 @@ ggsave(paste0("figures/withinCtry/fig_ap_deaths_var_",yy,"_",split_num_tag,"_gri
        plot = pl,
        width = 20, height = 25, units = "cm")
 
-# ==============================================================================
-#                                  CELLS COUNT                                 #
-# ==============================================================================
+################################## CELLS COUNT ################################# 
 
 ## GRID
 urbn_raster2 <- terra::resample(urbn_raster, pm.mort_raster2)
@@ -3009,19 +2860,11 @@ pop_t2 <- terra::resample(pop_t2, pm.mort_raster2)
 pop_t2 <- terra::crop(pop_t2, extent_raster)
 pop_elderly <- pop_ge652/pop_t2
 
-# Define classification function
-classify_function <- function(x) {
-  ifelse(x <= 10, 0, 
-         ifelse(x >= 11 & x <= 20, 1, # rural
-                ifelse(x >= 21 & x <= 22, 2, # town/suburb
-                       ifelse(x >= 23 & x <= 30, 3, NA)))) # urban
-}
 
 # Apply classification
 urbn_raster_classified <- terra::app(urbn_raster2, classify_function)
 names(urbn_raster_classified) <- "classification_layer"
 urbn_raster_combined <- c(urbn_raster2, urbn_raster_classified)
-
 
 
 # Filter out NA values directly on the rasters
@@ -3137,9 +2980,7 @@ ggsave(
 )
 
 
-# ==============================================================================
-#                               DISTRIBUTION MAPS                              #
-# ==============================================================================
+############################### DISTRIBUTION MAPS ################################
 
 ## MAP settlement type by grid cell -------------------------------------------
 urbn_raster_masked <- terra::classify(urbn_raster_combined_filtered,

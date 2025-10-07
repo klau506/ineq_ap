@@ -1,56 +1,15 @@
-require(eurostat)
-library(ggplot2)
-library(magrittr)
-library(tmap)
-tmap_options(check.and.fix = TRUE) 
+###############################################################################
 
-source("R/utils.R")
-source("R/zzz.R")
+# Study                 : Health impacts and socioeconomic inequalities of future outdoor air pollution in an NECP-compliant Europe
+# Date                  : Oct. 2025
+# Author                : Clàudia Rodés-Bachs
+# Institute             : BC3-Basque Centre for Climate Change
+# Description           : Analysis and figures' generation code 
+# Re-usage instructions : Execute this R script placing the data in the 'data' folder
 
-normalized <- T
-split_num <- 5 #10 deciles, 5 quintiles
-map <- T #T if plotted and saved, F otherwise
-yy <- 2030
-# ==============================================================================
-#                                  LOAD DATA                                   #
-# ==============================================================================
-normalized_tag <- dplyr::if_else(normalized, '_norm100k', '')
-split_num_tag <- dplyr::if_else(split_num == 5, 'quintile', 
-                                dplyr::if_else(split_num == 10, 'decile',
-                                               paste0('split_num_',split_num)))
-## rfasst + socioeconomid data =================================================
-ap_socioecon_sf <- get(load('ap_socioecon_sf3.RData'))
-deaths_socioecon_sf <- get(load('deaths_socioecon_sf_newdeaths3.RData'))
+###############################################################################
 
-rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>% 
-  dplyr::select(geo = region, year, age, sex, unit, pop = value) %>% 
-  dplyr::mutate(geo = dplyr::if_else(geo == 'CYP', 'CY000', geo)) 
-
-ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData")) %>%
-  dplyr::filter(year == yy)
-
-deaths <- get(load(paste0("data/rfasst_output/necp_m3_get_mort_pm25.output.RData"))) %>%
-  dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
-  dplyr::filter(year == yy)
-if (normalized) {
-  deaths <- deaths %>% 
-    dplyr::group_by(region, year, sex, scenario) %>% 
-    dplyr::summarise(value = sum(value)) %>% 
-    dplyr::ungroup() %>% 
-    dplyr::left_join(data.table::as.data.table(rfasst_pop) %>% 
-                       dplyr::filter(year == yy) %>%
-                       dplyr::group_by(region = geo, sex) %>% 
-                       dplyr::summarise(pop = sum(pop) * 1e6) %>% # popM was in million
-                       dplyr::ungroup(),
-                     by = c('region','sex')) %>% 
-    dplyr::mutate(value = value / pop * 1e6) %>% # deaths per 1000 habitants
-    dplyr::select(-pop)
-}
-
-## load spacial data ===========================================================
-nuts3_plot_data <- eurostat::get_eurostat_geospatial(resolution = 3, nuts_level = 3, year = 2021) %>%
-  dplyr::select(-FID) %>% 
-  dplyr::filter(CNTR_CODE != 'TR')
+if (!dir.exists('figures/meth_sketch')) dir.create('figures/meth_sketch')
 
 ## AP  =========================================================================
 ap_nuts3 <- ap %>%

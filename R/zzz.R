@@ -334,6 +334,7 @@ do_plot_within <- function(data, ox_label, type) {
   }
   
   pl <- pl +
+    scale_y_discrete(limits = rev) +
     labs(x = ox_label, y = "") +
     guides(
       color = guide_legend(override.aes = list(alpha = 1), order = 0),

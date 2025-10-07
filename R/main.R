@@ -6,7 +6,7 @@
 # Description           : Main script to produce the analysis and figures present in the Main and SI sections of the study 
 # Re-usage instructions : Execute this R script placing the data in the 'data' folder
 
-#################################### SET UP #################################### 
+######################################################################## SET UP ####
 
 # load libraries
 require(eurostat)
@@ -29,7 +29,7 @@ source('R/machine_learning.R')
 if (!dir.exists('figures')) dir.create('figures')
 
 
-################################## LOAD DATA ################################### 
+######################################################################## LOAD DATA #### 
 
 # constants
 normalized <- T
@@ -40,11 +40,11 @@ yy <- 2030
 
 source("R/load_data.R")
 
-############################## METHODOLOGY SKETCH ############################## 
+######################################################################## METHODOLOGY SKETCH #### 
 
 source("R/fig_meth_sketch.R")
 
-#################################### PLOTS #################################### 
+######################################################################## PLOTS #### 
 
 ## AP  -------------------------------------------------------------------------
 ap_nuts3 <- ap %>%
@@ -2338,7 +2338,7 @@ ggsave(file=file.path(paste0('figures/plot_combined_NUTS3.pdf')),
 
 
 
-############################### MACHINE LEARNING ############################### 
+######################################################################## MACHINE LEARNING ####
 
 ## AP vs INCOME ----------------------------------------------------------------
 ap_income_medi <- data.table::as.data.table(ap_socioecon_sf) %>%
@@ -2843,7 +2843,7 @@ ggsave(paste0("figures/withinCtry/fig_ap_deaths_var_",yy,"_",split_num_tag,"_gri
        plot = pl,
        width = 20, height = 25, units = "cm")
 
-################################## CELLS COUNT ################################# 
+######################################################################## CELLS COUNT #### 
 
 ## GRID
 urbn_raster2 <- terra::resample(urbn_raster, pm.mort_raster2)
@@ -2980,7 +2980,7 @@ ggsave(
 )
 
 
-############################### DISTRIBUTION MAPS ################################
+######################################################################## DISTRIBUTION MAPS ####
 
 ## MAP settlement type by grid cell -------------------------------------------
 urbn_raster_masked <- terra::classify(urbn_raster_combined_filtered,

@@ -560,29 +560,29 @@ quintile_means <- ap_deaths_nuts3 %>%
                    mean_deaths = mean(deaths, na.rm = TRUE))
 
 # define an offset for the reference points
-offset_x <- min(ap_deaths_nuts3$deaths, na.rm = TRUE) - 0.1 * diff(range(ap_deaths_nuts3$deaths))
-offset_y <- min(ap_deaths_nuts3$ap, na.rm = TRUE) - 0.1 * diff(range(ap_deaths_nuts3$ap))
+offset_x1 <- min(ap_deaths_nuts3$deaths, na.rm = TRUE) - 0.1 * diff(range(ap_deaths_nuts3$deaths))
+offset_y1 <- min(ap_deaths_nuts3$ap, na.rm = TRUE) - 0.1 * diff(range(ap_deaths_nuts3$ap))
 
 # define the start and end point of the segments
-a <- min(quintile_means$mean_deaths, na.rm = TRUE) -4 * scl  # start of vertical line
-b <- max(quintile_means$mean_deaths, na.rm = TRUE) +4 * scl  # end of vertical line
-c <- min(quintile_means$mean_ap, na.rm = TRUE) -0.10 * scl     # start of horizontal line
-d <- max(quintile_means$mean_ap, na.rm = TRUE) +0.10 * scl     # end of horizontal line
+a1 <- min(quintile_means$mean_deaths, na.rm = TRUE) -4 * scl  # start of vertical line
+b1 <- max(quintile_means$mean_deaths, na.rm = TRUE) +4 * scl  # end of vertical line
+c1 <- min(quintile_means$mean_ap, na.rm = TRUE) -0.10 * scl     # start of horizontal line
+d1 <- max(quintile_means$mean_ap, na.rm = TRUE) +0.10 * scl     # end of horizontal line
 
 
 plot_deaths_ap <- ggplot() +
   geom_segment(data = quintile_means[1,], 
-               aes(x = a, xend = b, y = offset_y, yend = offset_y), 
-               linetype = "dashed", size = 0.8, alpha = 0.75) +
+               aes(x = a1, xend = b1, y = offset_y1, yend = offset_y1), 
+               linetype = "dashed", linewidth = 0.8, alpha = 0.75, color = 'gray60') +
   geom_segment(data = quintile_means[1,], 
-               aes(x = offset_x, xend = offset_x, y = c, yend = d), 
-               linetype = "dashed", size = 0.8, alpha = 0.75) +
+               aes(x = offset_x1, xend = offset_x1, y = c1, yend = d1), 
+               linetype = "dashed", linewidth = 0.8, alpha = 0.75, color = 'gray60') +
   geom_point(data = ap_deaths_nuts3, 
              aes(x = deaths, y = ap, color = quintile, shape = urbn_type),
              alpha = 0.75, size = 2) +
-  geom_point(data = quintile_means, aes(x = offset_x, y = mean_ap, color = quintile), 
+  geom_point(data = quintile_means, aes(x = offset_x1, y = mean_ap, color = quintile), 
              size = 3, shape = 18) +
-  geom_point(data = quintile_means, aes(x = mean_deaths, y = offset_y, color = quintile), 
+  geom_point(data = quintile_means, aes(x = mean_deaths, y = offset_y1, color = quintile), 
              size = 3, shape = 18) + 
   scale_color_manual(
     values = quintiles.color,
@@ -594,7 +594,7 @@ plot_deaths_ap <- ggplot() +
        y = "PM2.5 concentration [µg/m³]",
        color = "Income quintiles", 
        shape = "Settlement Type") +
-  expand_limits(x = offset_x, y = offset_y) +
+  expand_limits(x = offset_x1, y = offset_y1) +
   theme(
     panel.background = element_rect(fill = "white", colour = "white"),
     panel.grid.major = element_line(colour = "grey90"),
@@ -604,7 +604,7 @@ plot_deaths_ap <- ggplot() +
     strip.background = element_blank(),
     axis.text = element_text(size = legend.text.size),
     legend.key.size = unit(1.5, "cm"),
-    legend.title = element_text(size = legend.text.size),
+    legend.title = element_text(size = legend.text.size+2),
     legend.text = element_text(size = legend.text.size)
   )
 
@@ -1094,6 +1094,137 @@ deaths_geo_per_elderly %>%
 # 3 3                 0.206            0.224            0.215              0.215        0.00520   277
 # 4 4                 0.224            0.246            0.234              0.234        0.00613   277
 # 5 5                 0.246            0.354            0.267              0.262        0.0193    276
+
+
+## GRID AP vs DEATHS SCATTERPLOT  ---------------------------------------------------
+rr_inc <- load_grid_data_inc(type = 'ap')
+rr_urb <- load_grid_data_urb(type = 'ap')
+
+ap_values <- rr_inc[[1]]
+inc_values <- rr_inc[[2]]
+urb_values <- rr_urb[[2]]
+
+rr_mort <- terra::resample(pm.mort_raster2, pm.ap_raster2)
+rr_mort <- terra::crop(rr_mort, extent_raster)
+# Filter out NA values directly on the rasters
+rr_mort_filtered <- terra::mask(rr_mort, rr_mort, maskvalue = NA)
+# Convert the filtered rasters to data frames
+mort_values <- terra::values(rr_mort_filtered)
+
+
+# Remove NA values
+valid_idx <- !is.na(ap_values) & !is.na(inc_values) & !is.na(urb_values) & !is.na(mort_values)
+df_scatter <- data.frame(pm_concentration = ap_values[valid_idx], 
+                         pm_deaths = mort_values[valid_idx],
+                         urbn_type = urb_values[valid_idx],
+                         inc_per_capita = inc_values[valid_idx],
+                         ctry_names = ctry_values[valid_idx])
+
+df_scatter_no0 <- df_scatter[df_scatter$pm_concentration > 0,]
+df_scatter_no0 <- df_scatter_no0[df_scatter_no0$pm_deaths > 0.15e-4,]
+df_scatter_no0 <- df_scatter_no0[df_scatter_no0$urbn_type > 0,]
+df_scatter_no0 <- df_scatter_no0[df_scatter_no0$inc_per_capita > 0,]
+df_scatter_no0 <- unique(df_scatter_no0) %>% 
+  dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(inc_per_capita, 5))) 
+
+df_scatter_no0_sample <- df_scatter_no0 %>% 
+  dplyr::slice_sample(n = 10000) %>% 
+  dplyr::mutate(urbn_type = dplyr::if_else(urbn_type == 1, 'Rural',
+                                          dplyr::if_else(urbn_type == 2, 'Town/\nSuburb',
+                                                         dplyr::if_else(urbn_type == 3, 'City', NA)))) %>% 
+  dplyr::mutate(urbn_type = forcats::fct_relevel(urbn_type, 'City','Town/\nSuburb','Rural')) 
+
+# calculate mean values for each quintile
+binned_data <- df_scatter_no0 %>%
+  dplyr::filter(rowSums(is.na(.)) == 0) %>% 
+  dplyr::group_by(quintile = quintile_5) %>%
+  dplyr::summarize(mean_ap = mean(pm_concentration),
+                   mean_deaths = mean(pm_deaths)) %>% 
+  dplyr::ungroup()
+
+# define an offset for the reference points
+offset_x2 <- 0
+offset_y2 <- min(binned_data$mean_ap, na.rm = TRUE) - 1.75 * diff(range(binned_data$mean_ap))
+
+# define the start and end point of the segments
+a2 <- min(binned_data$mean_deaths, na.rm = TRUE) -5e-6 * scl  # start of vertical line
+b2 <- max(binned_data$mean_deaths, na.rm = TRUE) +5e-6 * scl  # end of vertical line
+c2 <- min(binned_data$mean_ap, na.rm = TRUE) -0.1 * scl     # start of horizontal line
+d2 <- max(binned_data$mean_ap, na.rm = TRUE) +0.1 * scl     # end of horizontal line
+
+
+plot_deaths_ap_grid <- ggplot() +
+  geom_segment(data = binned_data[1,],
+               aes(x = a2, xend = b2, y = offset_y2, yend = offset_y2),
+               linetype = "dashed", linewidth = 0.8, alpha = 0.75, color = 'gray60') +
+  geom_segment(data = binned_data[1,],
+               aes(x = offset_x2, xend = offset_x2, y = c2, yend = d2),
+               linetype = "dashed", linewidth = 0.8, alpha = 0.75, color = 'gray60') +
+  geom_point(data = df_scatter_no0_sample,
+             aes(x = pm_deaths, y = pm_concentration, color = quintile_5, shape = urbn_type),
+             alpha = 0.75, size = 2) +
+  geom_point(data = binned_data, aes(x = offset_x2, y = mean_ap, color = quintile),
+             size = 3, shape = 18) +
+  geom_point(data = binned_data, aes(x = mean_deaths, y = offset_y2, color = quintile),
+             size = 3, shape = 18) +
+  scale_color_manual(
+    values = quintiles.color,
+    name = "Income quintiles",
+    labels = quintiles.labs
+  ) +
+  theme_minimal() +
+  labs(x = "Premature mortality rate [per grid cell]", 
+       y = "PM2.5 concentration [µg/m³]",
+       color = "Income quintiles", 
+       shape = "Settlement Type") +
+  expand_limits(x = offset_x2, y = offset_y2) +
+  theme(
+    panel.background = element_rect(fill = "white", colour = "white"),
+    panel.grid.major = element_line(colour = "grey90"),
+    panel.border = element_blank(),
+    panel.ontop = FALSE,
+    strip.text = element_text(size = legend.text.size),
+    strip.background = element_blank(),
+    axis.text = element_text(size = legend.text.size),
+    legend.key.size = unit(1.5, "cm"),
+    legend.title = element_text(size = legend.text.size+2),
+    legend.text = element_text(size = legend.text.size)
+  )
+
+
+
+ggsave(
+  file = paste0("figures/plot_deaths_ap", normalized_tag, "_grid.pdf"), height = 15, width = 20, units = "cm",
+  plot = plot_deaths_ap_grid
+)
+
+
+
+## FULL AP vs DEATHS SCATTERPLOT  ---------------------------------------------------
+
+combined_scatterplot <- plot_grid(ggdraw() +
+                                    draw_label("a)",
+                                               x = 0, hjust = 0, vjust = -23, fontface = "bold", size = 12) +
+                                    draw_plot(plot_deaths_ap_grid + theme(legend.position = 'none'), y = 0, height = 1),
+                                  ggdraw() +
+                                    draw_label("b)",
+                                               x = 0, hjust = 0, vjust = -23, fontface = "bold", size = 12) +
+                                    draw_plot(plot_deaths_ap + theme(legend.position = 'none'), y = 0, height = 1),
+                                  ncol = 1, rel_heights = c(1, 1)
+)
+
+combined_scatterplot2 <- cowplot::plot_grid(
+  combined_scatterplot,
+  cowplot::get_legend(plot_deaths_ap_grid),
+  ncol = 2,
+  rel_widths = c(1, 0.2)
+)
+
+ggsave(
+  file = paste0("figures/plot_scatterplot_full", normalized_tag, ".pdf"), height = 30, width = 20, units = "cm",
+  plot = combined_scatterplot2
+)
+
 
 
 ## GRID - AP vs URBN_TYPE ------------------------------------------------------

@@ -27,6 +27,14 @@ ml_clustering <- function(data, cluster_number, fig_name, type) {
   
   rownames(ranked_data) <- data$country  # Assign row names
   
+  # Check if too equal countries, and fix them
+    # full row
+    rows_all_equal <- apply(ranked_data, 1, function(x) length(unique(x)) == 1)
+    ranked_data[rows_all_equal, ] <- matrix(1:5, nrow = sum(rows_all_equal), ncol = ncol(ranked_data), byrow = TRUE)
+    
+    # paired values
+    ranked_data[] <- t(apply(ranked_data, 1, adjust_half_values))
+  
   # Compute Spearman correlation matrix
   cor_matrix <- cor(t(ranked_data), method = "spearman")
   

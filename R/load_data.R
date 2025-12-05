@@ -163,7 +163,7 @@ vec <- as.vector(pm.mort_raster[['total']])
 if (normalized) {
   vec <- vec * 1e6 # deaths / 1Mpeople
 } else {
-  vec <- log(vec)
+  # vec <- log(vec)
 }
 pm.mort_raster <- terra::setValues(pm.ap_raster2, vec)
 pm.mort_raster2 <- terra::crop(pm.mort_raster, extent_raster)

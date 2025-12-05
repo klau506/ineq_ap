@@ -9,6 +9,32 @@
 
 ###############################################################################
 
+#' adjust_half_values
+#' @description ranking matrix helper function. If two values are equal, order 
+#' is reported as half values (e.g, 2.5). This functions detects if this happens
+#' in a row, and adds rounds them to have integer values.
+#' @param row row number
+adjust_half_values <- function(row) {
+  # Find which values end with .5
+  half_idx <- which(abs(row - floor(row) - 0.5) < 1e-8)
+  
+  if(length(half_idx) == 0) {
+    return(row)  # no .5 values, no change
+  }
+  
+  # Process .5 case
+  for(i in seq(1, length(half_idx) - 1, by = 2)) {
+    idx1 <- half_idx[i]
+    idx2 <- half_idx[i + 1]
+    
+    row[idx1] <- row[idx1] - 0.5
+    row[idx2] <- row[idx2] + 0.5
+  }
+    
+  return(row)
+}
+
+
 
 #' rename_scen
 #' @description Rename the scenarios in the dataset

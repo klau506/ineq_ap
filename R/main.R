@@ -32,7 +32,7 @@ if (!dir.exists('figures')) dir.create('figures')
 ######################################################################## LOAD DATA #### 
 
 # constants
-normalized <- F
+normalized <- T
 split_num <- 5 #10 deciles, 5 quintiles
 
 map <- T #T if plotted and saved, F otherwise
@@ -690,23 +690,23 @@ legend_type = 'quintiles_v'
 legend_color = paste0(legend_type, '.color')
 legend_labs = paste0(legend_type, '.labs')
 leg = ggpubr::get_legend(plot_ap_income[[1]] + 
-   scale_color_manual(
-     values = get(legend_color),
-     name = legend_title,
-     labels = get(legend_labs)
-   ) +
-   scale_fill_manual(
-     values = get(legend_color),
-     name = legend_title,
-     labels = get(legend_labs)
-   ) +
-   guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
-   theme(
-    legend.direction = 'vertical',
-    legend.position = 'right',
-    legend.key.size = unit(0.75, "cm"),
-    legend.title = element_text(size = legend.text.size+5),
-    legend.text = element_text(size = legend.text.size+3))
+                           scale_color_manual(
+                             values = get(legend_color),
+                             name = legend_title,
+                             labels = get(legend_labs)
+                           ) +
+                           scale_fill_manual(
+                             values = get(legend_color),
+                             name = legend_title,
+                             labels = get(legend_labs)
+                           ) +
+                           guides(color = guide_legend(override.aes = list(alpha = 1, fill = NA) ) ) +
+                           theme(
+                             legend.direction = 'vertical',
+                             legend.position = 'right',
+                             legend.key.size = unit(0.75, "cm"),
+                             legend.title = element_text(size = legend.text.size+5),
+                             legend.text = element_text(size = legend.text.size+3))
 )
 save(leg, file = paste0("figures/legend_income_v.RData"))
 
@@ -1156,8 +1156,8 @@ df_scatter_no0 <- unique(df_scatter_no0) %>%
 df_scatter_no0_sample <- df_scatter_no0 %>% 
   dplyr::slice_sample(n = 10000) %>% 
   dplyr::mutate(urbn_type = dplyr::if_else(urbn_type == 1, 'Rural',
-                                          dplyr::if_else(urbn_type == 2, 'Town/\nSuburb',
-                                                         dplyr::if_else(urbn_type == 3, 'City', NA)))) %>% 
+                                           dplyr::if_else(urbn_type == 2, 'Town/\nSuburb',
+                                                          dplyr::if_else(urbn_type == 3, 'City', NA)))) %>% 
   dplyr::mutate(urbn_type = forcats::fct_relevel(urbn_type, 'City','Town/\nSuburb','Rural')) 
 
 # calculate mean values for each quintile
@@ -1455,10 +1455,10 @@ ap_grid_income_sample_ctry <- ap_grid_income %>%
 # plots ------------------------------------------------------------------------
 
 plot_grid_ap_income <- prob_jitter_plot(ap_grid_income_sample %>% 
-                                        dplyr::rename(item = ap), 
-                                      legend_title = 'Income quintiles', 
-                                      legend_type = 'quintiles',
-                                      ox_text = 'PM2.5 concentration [ug/m3]')
+                                          dplyr::rename(item = ap), 
+                                        legend_title = 'Income quintiles', 
+                                        legend_type = 'quintiles',
+                                        ox_text = 'PM2.5 concentration [ug/m3]')
 ggsave(
   file = paste0("figures/plot_grid_ap_income.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_grid_ap_income[[1]]
@@ -1559,9 +1559,9 @@ df_ap_eld_no0 <- df_ap_eld[df_ap_eld$pm_concentration > 0,]
 df_ap_eld_no0 <- df_ap_eld_no0[df_ap_eld_no0$pop_elderly_per > 0,]
 df_ap_eld_no0 <- unique(df_ap_eld_no0) %>% 
   dplyr::filter(!ctry_names %in% c(0,2,13,24,25,31)) %>% # remove Albania, Bosnia and Herzegovina, 
-                                     # Macedonia, North Macedonia, Montenegro, Serbia, and UK
-                                     # since not present in the elderly data (but
-                                     # border mismatch, so they appears)
+  # Macedonia, North Macedonia, Montenegro, Serbia, and UK
+  # since not present in the elderly data (but
+  # border mismatch, so they appears)
   dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
   dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(pop_elderly_per, 5))) 
 
@@ -1700,7 +1700,11 @@ df_mort_urbn <- data.frame(pm_mort = pm_values[valid_idx],
                            urbn_type = urbn_values[valid_idx],
                            ctry_names = ctry_values[valid_idx])
 
-df_mort_urbn_no0 <- df_mort_urbn[df_mort_urbn$pm_mort > 0.15e+2,]
+if (normalized) {
+  df_mort_urbn_no0 <- df_mort_urbn[df_mort_urbn$pm_mort > 0.15e+2,]
+} else {
+  df_mort_urbn_no0 <- df_mort_urbn
+}
 df_mort_urbn_no0 <- df_mort_urbn_no0[df_mort_urbn_no0$urbn_type > 0,]
 df_mort_urbn_no0 <- unique(df_mort_urbn_no0) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
@@ -1747,7 +1751,13 @@ deaths_grid_urbn_sample_ctry <- deaths_grid_urbn %>%
 # plots ------------------------------------------------------------------------
 plot_grid_deaths_urbn <- prob_jitter_plot(deaths_grid_urbn_sample %>% 
                                             dplyr::rename(item = deaths) %>% 
-                                            dplyr::filter(item > 25), 
+                                            { 
+                                              if (normalized) {
+                                                dplyr::filter(., item > 25)
+                                              } else{
+                                                dplyr::filter(., TRUE)
+                                              }
+                                            }, 
                                           legend_title = 'Urban type',
                                           legend_type = 'urbn_type',
                                           ox_text = dplyr::if_else(normalized,
@@ -1830,7 +1840,11 @@ df_mort_inc <- data.frame(pm_mort = pm_values[valid_idx],
                           inc_per_capita = inc_values[valid_idx],
                           ctry_names = ctry_values[valid_idx])
 
-df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort > 0.15e+2,]
+if (normalized) {
+  df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort > 0.15e+2,]
+} else {
+  df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort < 0.4,]
+}
 df_mort_inc_no0 <- df_mort_inc_no0[df_mort_inc_no0$inc_per_capita > 0,]
 df_mort_inc_no0 <- unique(df_mort_inc_no0) %>% 
   dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(inc_per_capita, 5))) %>% 
@@ -1873,7 +1887,13 @@ deaths_grid_income_sample_ctry <- deaths_grid_income %>%
 # plots ------------------------------------------------------------------------
 plot_grid_deaths_income <- prob_jitter_plot(deaths_grid_income_sample %>% 
                                               dplyr::rename(item = deaths) %>% 
-                                              dplyr::filter(item > 25), 
+                                              { 
+                                                if (normalized) {
+                                                  dplyr::filter(., item > 25)
+                                                } else{
+                                                  dplyr::filter(., TRUE)
+                                                }
+                                              }, 
                                             legend_title = 'Income quintiles',
                                             legend_type = 'quintiles',
                                             ox_text = dplyr::if_else(normalized,
@@ -1980,7 +2000,11 @@ df_mort_eld <- data.frame(pm_mort = pm_values[valid_idx],
                           pop_elderly_per = pop_elderly[valid_idx],
                           ctry_names = ctry_values[valid_idx])
 
-df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0.15e+2,]
+if (normalized) {
+  df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0.15e+2,]
+} else {
+  df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort < 0.4,]
+}
 df_mort_eld_no0 <- df_mort_eld_no0[df_mort_eld_no0$pop_elderly_per > 0,]
 df_mort_eld_no0 <- unique(df_mort_eld_no0) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
@@ -2023,7 +2047,13 @@ deaths_grid_per_elderly_sample_ctry <- deaths_grid_per_elderly %>%
 # plots ------------------------------------------------------------------------
 plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample %>% 
                                                    dplyr::rename(item = deaths) %>% 
-                                                   dplyr::filter(item > 25), 
+                                                   { 
+                                                     if (normalized) {
+                                                       dplyr::filter(., item > 25)
+                                                     } else{
+                                                       dplyr::filter(., TRUE)
+                                                     }
+                                                   }, 
                                                  legend_title = 'Elderly proportion\nquintiles', 
                                                  legend_type = 'quintiles_v2',
                                                  ox_text = dplyr::if_else(normalized,
@@ -2589,7 +2619,7 @@ deaths_income_medi <- data.table::as.data.table(deaths_socioecon_sf) %>%
   dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
   dplyr::ungroup()
 
-data <- deaths_income_medi %>%
+data <- deaths_income_medi %>% 
   tibble::as_tibble() %>% 
   dplyr::mutate(quintile = paste0('Q',quintile)) %>%
   dplyr::arrange(quintile, ctry) %>% 
@@ -3013,7 +3043,7 @@ df_cells_no0 <- unique(df_cells_no0) %>%
                                            dplyr::if_else(urbn_type == 2, 'Town/Suburb',
                                                           dplyr::if_else(urbn_type == 3, 'City', NA)))) %>% 
   dplyr::mutate(urbn_type = forcats::fct_relevel(urbn_type, 'City','Town/Suburb','Rural'))
-  
+
 
 ## NUTS3
 df_cells_nuts3 <- data.table::as.data.table(deaths_socioecon_sf) %>%
@@ -3048,9 +3078,9 @@ df_cells_urbn_inc_count <- merge(
                 y_offset = dplyr::case_when(
                   agg_level == "n_grid" ~ quintile_num + 0.05,
                   agg_level == "n_nuts" ~ quintile_num - 0.05
-                  )
+                )
   )
-                    
+
 pl <- count_cells_plot(df_cells_urbn_inc_count, axis_title = 'Income quintile')
 ggsave(
   file = paste0("figures/plot_count_cells_urbn_income.pdf"), height = 13, width = 18, units = "cm",
@@ -3769,7 +3799,7 @@ emiss_data_sec <- emiss_data %>%
   rename_sec()
 
 plot_d_sec <- ggplot(emiss_data_sec,
-               aes(x = scenario, y = value, fill = sector)) +
+                     aes(x = scenario, y = value, fill = sector)) +
   geom_bar(stat = "identity", position = "stack", width = 0.6) +
   labs(title = "", y = "Emissions", x = "") +
   scale_fill_manual(values = pal_sec, name = 'Sector') +

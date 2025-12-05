@@ -10,6 +10,56 @@
 ###############################################################################
 
 
+#' rename_scen
+#' @description Rename the scenarios in the dataset
+#' @param df dataset
+rename_scen <- function(df) {
+  df <- df %>%
+    mutate(scenario = dplyr::if_else(grepl("EU_NECP_LTT", scenario), 'POLICY55', scenario),
+           scenario = dplyr::if_else(grepl("Ref", scenario), 'Baseline', scenario))
+  
+  invisible(df)
+}
+pal_sce <- c("Baseline"="#B1A296","POLICY55"="#7A9BAE")
+
+
+#' rename_sec
+#' @description Rename the sectors in the dataset
+#' @param df dataset
+rename_sec <- function(df) {
+  df <- df %>%
+    mutate(sector = dplyr::if_else(sector == "AGR", 'Agriculture', sector),
+           sector = dplyr::if_else(sector == "AN", 'Livestock', sector),
+           sector = dplyr::if_else(sector == "COM", 'Commercial buildings', sector),
+           sector = dplyr::if_else(sector == "EN", 'Energy', sector),
+           sector = dplyr::if_else(sector == "IND", 'Industry', sector),
+           sector = dplyr::if_else(sector == "RESID", 'Residential buildings', sector),
+           sector = dplyr::if_else(sector == "TRN", 'Transport', sector),
+           sector = dplyr::if_else(sector == "UNM", 'Unmanaged land', sector),
+           sector = dplyr::if_else(sector == "URB", 'Urban processes', sector))
+  
+  invisible(df)
+}
+pal_sec <- c("AGR" = '#a7c957',
+             "AN" = '#386641',
+             "COM" = '#005f73',
+             "EN" = '#ffbe0b',
+             "IND" = '#780000',
+             "RESID" = '#8ecae6',
+             "TRN" = '#bc6c25',
+             "UNM" = '#f28482',
+             "URB" = '#6d6875',
+             "Agriculture" = '#a7c957',
+             "Livestock" = '#386641',
+             "Commercial buildings" = '#005f73',
+             "Energy" = '#ffbe0b',
+             "Industry" = '#780000',
+             "Residential buildings" = '#8ecae6',
+             "Transport" = '#bc6c25',
+             "Unmanaged land" = '#f28482',
+             "Urban processes" = '#6d6875')
+
+
 #' classify_function
 #' @description Settlement type classification function following the NUTS3 data description
 #' @param x vector
@@ -240,7 +290,7 @@ prob_jitter_plot <- function(data, legend_position = c(0.87,0.87), legend_title 
 do_plot_within <- function(data, ox_label, type) {
   
   # nuts3
-  if (type != 'grid') {
+  if (!type %in% c('grid_ap','grid_deaths')) {
     pl <- ggplot() +
       # income
       geom_point(
@@ -343,9 +393,12 @@ do_plot_within <- function(data, ox_label, type) {
                  labeller = labeller(variable = c(income = "Income\nper capita",
                                                   elderly = "Elderly\nproportion",
                                                   urbn = "Settlement\ntype")),
-                 scales = 'fixed') +
-      # beautiful ox scale
-      scale_x_continuous(labels = sci_formatter2)
+                 scales = 'fixed') 
+    if (type == 'grid_ap') {
+      pl <- pl +
+        # beautiful ox scale
+        scale_x_continuous(labels = sci_formatter2)
+    }
   }
   
   pl <- pl +
@@ -372,6 +425,11 @@ do_plot_within <- function(data, ox_label, type) {
       legend.text = element_text(size = legend.text.size),
       legend.position = 'right'
     )
+  
+  if (type == 'grid_deaths') {
+    pl <- pl +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  }
   
   return(pl)
 }
@@ -482,7 +540,7 @@ do_map_between_socioecon <- function(raster_filtered,
   r <- raster::raster(raster_filtered)
   terra::plot(r, 
               col = legend_color, 
-              breaks = 1:5,
+              breaks = seq(0.5, 5.5, by = 1),
               legend = FALSE, 
               axes = FALSE, 
               box = FALSE)
@@ -602,7 +660,7 @@ do_map_within_socioecon <- function(raster_filtered,
   r <- raster::raster(quintile_raster)
   terra::plot(r, 
               col = legend_color, 
-              breaks = 1:5,
+              breaks = seq(0.5, 5.5, by = 1),
               legend = FALSE, 
               axes = FALSE, 
               box = FALSE)

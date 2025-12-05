@@ -29,8 +29,11 @@ rfasst_pop <- rfasst::pop.all.ctry_nuts3.str.SSP2 %>%
 save(rfasst_pop, file = "data/tmp/rfasst_pop.RData")
 
 #### rfasst output data ========================================================
-ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData")) %>%
-  dplyr::filter(year == yy)
+# ap <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData")) %>%
+ap <- read.csv("data/rfasst_output/EU_NECP_LTT-Rev1.1_2030_WORLD-NUTS3_pm25_avg.csv") %>%
+  dplyr::filter(year == yy) %>% 
+  dplyr::rename(region = id_code,
+                value = pm25_avg)
 ap_nuts3 <- ap %>%
   dplyr::filter(
     nchar(region) > 3
@@ -44,7 +47,7 @@ ap_nuts3 <- ap %>%
   )
 ap_nuts3_sf <- sf::st_sf(ap_nuts3, geometry = ap_nuts3$geometry)
 
-deaths <- get(load(paste0("data/rfasst_output/necp_m3_get_mort_pm25.output.RData"))) %>%
+deaths <- get(load(paste0("data/rfasst_output/necp_m3_get_mort_pm25-Rev1.1.output.RData"))) %>% 
   dplyr::select(region, year, age, sex, disease, value = GBD, scenario) %>% 
   dplyr::filter(year == yy)
 if (normalized) {
@@ -88,7 +91,7 @@ save(urbn_type, file = "data/tmp/urbn_type.RData")
 
 
 #### income pc by nuts3 data ===================================================
-pm.ap_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
+pm.ap_raster <- terra::rast("data/rfasst_output/EU_NECP_LTT-Rev1.1_2030_pm25_fin_weighted.tif")
 extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
 pm.ap_raster_crop <- terra::crop(pm.ap_raster, extent_raster)
 
@@ -138,7 +141,7 @@ nuts3_with_inc <- nuts3_with_inc %>%
   dplyr::mutate(inc_pc_nuts3 = inc_nuts3 / pop_nuts3) %>% 
   dplyr::filter(!CNTR_CODE %in% c('AL','RS','MK','ME')) # remove countries with population missing data
 
-sf::st_write(nuts3_with_inc, "data/tmp/nuts3_with_inc.shp", append = FALSE)
+sf::st_write(nuts3_with_inc, "data/tmp/nuts3_with_inc-Rev1.1.shp", append = FALSE)
 
 #### gini by nuts3 data ========================================================
 # Source: https://entrepot.recherche.data.gouv.fr/dataset.xhtml?persistentId=doi:10.57745/TTIOKI
@@ -192,7 +195,7 @@ harm_data_sf <- data.table::as.data.table(harm_data) %>%
     by = "geo"
   )
 harm_data_sf <- sf::st_sf(harm_data_sf, geometry = harm_data_sf$geometry)
-sf::st_write(harm_data_sf, "data/tmp/harm_data_sf.shp", append = FALSE)
+sf::st_write(harm_data_sf, "data/tmp/harm_data_sf-Rev1.1.shp", append = FALSE)
 
 # ==============================================================================
 #                                 PLOT INDICATORS                              #
@@ -380,7 +383,7 @@ harm_socioeconomic_nuts_sf2 <- harm_socioeconomic_nuts_sf %>%
   )
 harm_socioeconomic_nuts_sf2 <- sf::st_sf(harm_socioeconomic_nuts_sf2, geometry = harm_socioeconomic_nuts_sf2$geometry)
 
-sf::st_write(harm_socioeconomic_nuts_sf2, "data/tmp/harm_socioeconomic_nuts_sf_newdeaths_NECP2.gpkg", append = FALSE)
+sf::st_write(harm_socioeconomic_nuts_sf2, "data/tmp/harm_socioeconomic_nuts_sf_POLICY55-Rev1.1.gpkg", append = FALSE)
 
 
 
@@ -396,7 +399,7 @@ ap_socioecon_sf <- sf::st_intersection(
     dplyr::select(ap, ctry = CNTR_CODE, geometry) %>% 
     unique()
 )
-save(ap_socioecon_sf, file = 'ap_socioecon_sf3.RData')
+save(ap_socioecon_sf, file = 'ap_socioecon_sf-Rev1.1.RData')
 
 ## DEATHS vs socioeconomic DATA ====================================================
 # merge DEATHS & socioeconomic data
@@ -414,4 +417,4 @@ b = deaths_nuts3_sf %>%
 deaths_socioecon_sf <- sf::st_intersection(
   a,b
 )
-save(deaths_socioecon_sf, file = 'deaths_socioecon_sf_newdeaths3.RData')
+save(deaths_socioecon_sf, file = 'deaths_socioecon_sf-Rev1.1.RData')

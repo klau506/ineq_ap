@@ -86,7 +86,7 @@ ml_do_all <- function(data, cluster_number, fig_name,
       name = fig_legend,
       labels = quintiles.labs
     ) +
-    labs(x = fig_ox_label, y = "", fill = "Decile") +
+    labs(x = fig_ox_label, y = "") +
     theme(axis.text = element_text(size = 12))
   ggsave(
     file = file.path("figures",paste0(fig_name,"_",type,"_ordered.pdf")), 

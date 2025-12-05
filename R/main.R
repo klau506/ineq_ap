@@ -32,11 +32,13 @@ if (!dir.exists('figures')) dir.create('figures')
 ######################################################################## LOAD DATA #### 
 
 # constants
-normalized <- T
+normalized <- F
 split_num <- 5 #10 deciles, 5 quintiles
 
 map <- T #T if plotted and saved, F otherwise
 yy <- 2030
+
+set.seed(300)
 
 source("R/load_data.R")
 
@@ -44,12 +46,17 @@ source("R/load_data.R")
 
 source("R/fig_meth_sketch.R")
 
+######################################################################## ECONOMETRIC CHECK #### 
+
+source("R/econometric_check.R")
+
 ######################################################################## PLOTS #### 
 
 ## AP  -------------------------------------------------------------------------
 ap_nuts3 <- ap %>%
   dplyr::filter(
-    nchar(region) > 3
+    nchar(region) > 3,
+    !stringr::str_detect(region, 'TR')
   ) %>%
   dplyr::rename(
     geo = region,
@@ -101,12 +108,12 @@ dat_rank = ap_nuts3_sf %>%
   dplyr::ungroup() %>% 
   dplyr::arrange(mean_ap)
 print(tail(dat_rank))
- # MT        2030    10.4 
- # NL        2030    10.5 
- # CH        2030    10.9 
- # BE        2030    11.4 
- # TR        2030    11.6 
- # IT        2030    12.9
+# 1 HU         2030    9.67
+# 2 BE         2030   10.7 
+# 3 CH         2030   10.7 
+# 4 MT         2030   10.7 
+# 5 NL         2030   11.0 
+# 6 IT         2030   12.4 
 
 
 ## GRID - AP  -------------------------------------------------------------------------
@@ -134,12 +141,14 @@ dev.off()
 deaths_nuts3 <- deaths %>%
   dplyr::filter(
     nchar(region) > 3,
+    !stringr::str_detect(region, 'TR'),
     sex == 'Both'
   ) %>%
   dplyr::rename(
     geo = region,
     deaths = value
   ) %>%
+  dplyr::filter(!is.na(deaths)) %>% 
   dplyr::left_join(nuts3_plot_data,
                    by = "geo"
   )
@@ -156,7 +165,7 @@ plot_deaths_gg <- ggplot() +
           color = "black",
           size = 0.05) + 
   scale_fill_distiller(palette = "Oranges", direction = 1, 
-                       name = "Premature Deaths\n[Deaths per 1M inhabitants]") +
+                       name = "Premature Deaths\n[deaths per 1M inhabitants]") +
   
   coord_sf(xlim = c(crop_xmin, crop_xmax), ylim = c(crop_ymin, crop_ymax)) +
   theme_minimal() +
@@ -187,18 +196,16 @@ dat_rank = deaths_nuts3_sf %>%
   dplyr::arrange(mean_deaths)
 print(tail(dat_rank))
 #  CNTR_CODE  year mean_deaths
-#  HR         2030        375.
-#  ME         2030        405.
-#  HU         2030        460.
-#  MK         2030        475.
-#  RS         2030        498.
-#  BG         2030        551.
+# 1 SK         2030        357.
+# 2 ME         2030        382.
+# 3 MK         2030        437.
+# 4 HU         2030        445.
+# 5 RS         2030        495.
+# 6 BG         2030        523.
 
 
 ## GRID - DEATHS  -------------------------------------------------------------------------
 filtered_raster <- pm.mort_raster2_europe
-filtered_raster[filtered_raster <= 0] <- NA
-filtered_raster[filtered_raster > 3.5] <- 3.5
 
 if (normalized) {
   pdf(paste0("figures/plot_grid_mort",norm_grid_tag,".pdf"), width = 11/2.54, height = 10/2.54)
@@ -233,7 +240,7 @@ if (normalized) {
                  cex.axis = legend.text.size.raster
                ),
                legend.args = list(
-                 text = 'Premature mortality\nrate [per grid cell]',
+                 text = 'Premature mortality rate\n[per 1M inhabitants,\nper grid cell]',
                  side = 3,
                  font = 1,
                  line = 0.5,
@@ -246,7 +253,10 @@ if (normalized) {
   r <- raster::mask(r, as(turkey, "Spatial"), inverse = TRUE) # remove Turkey from the map
   base_r <- raster::raster(eu_mask_raster2)
   base_r <- raster::mask(base_r, as(turkey, "Spatial"), inverse = TRUE) # remove Turkey from the map
-  colors <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
+  colors0 <- colorRampPalette(RColorBrewer::brewer.pal(9, "Oranges"))(100)
+  col_part1 <- colors0[seq(50, 100, by = 8)]
+  col_part2 <- colors0[seq(1, 50, by = 2)]
+  colors <- c(col_part2, col_part1)
   par(mar = c(0, 0, 0, 0))
   raster::plot(base_r,
                col = 'gray90',
@@ -261,21 +271,17 @@ if (normalized) {
                box = FALSE,
                add = TRUE,
                useRaster = TRUE)
-  legend_ticks <- c(0, 1, 2, 3, raster::maxValue(r))
-  legend_labels <- c("0", "1", "2", "3", paste0(">", floor(max(r[], na.rm = TRUE))))
   raster::plot(r, legend.only = TRUE,
                col = colors,
                legend.width = 1,
                legend.shrink = 0.65,
                frame.plot = FALSE,
                axis.args = list(
-                 at = legend_ticks,
-                 labels = legend_labels,
                  font = 1,
                  cex.axis = legend.text.size.raster
                ),
                legend.args = list(
-                 text = 'Premature deaths\n[absolute number]',
+                 text = 'Premature deaths\n[absolute number,\nlog scale]',
                  side = 3,
                  font = 1,
                  line = 0.5,
@@ -346,12 +352,12 @@ dat_rank = ap_ctry_sf %>%
   dplyr::arrange(mean_ap)
 print(tail(dat_rank))
 # ISO3  year  mean_ap
-# NLD   2030     10.2
-# HUN   2030     10.2
-# LUX   2030     10.3
-# BEL   2030     10.9
-# CHE   2030     11.0
-# ITA   2030     12.5
+# 1 HUN    2030    9.65
+# 2 MLT    2030   10.2 
+# 3 BEL    2030   10.2 
+# 4 NLD    2030   10.7 
+# 5 CHE    2030   10.7 
+# 6 ITA    2030   12.0 
 
 
 ## AP CTRY LIMIT WHO -------------------------------------------------------------------------
@@ -385,20 +391,22 @@ plot_ap_gg <- ggplot() +
           aes(fill = ap),
           color = "black",
           size = 0.0001) +
-  geom_sf_pattern(data = ap_ctry_sf %>% dplyr::filter(overWHO) %>% 
+  geom_sf_pattern(data = ap_ctry_sf %>% 
+                    dplyr::filter(overWHO) %>% 
                     dplyr::distinct(),
                   aes(fill = ap),
+                  linewidth = NA,
                   pattern = "stripe", 
                   pattern_density = 0.4,
-                  pattern_spacing = 0.02,
+                  pattern_spacing = unit(0.02, "npc"),
                   pattern_angle = 45,
                   pattern_linetype = "solid",
                   pattern_fill = "transparent",
                   pattern_color = "red",
-                  pattern_size = 0.1,
+                  pattern_size = unit(0.1, "mm"),
                   pattern_alpha = 0.8,
                   color = "black") +
-  scale_fill_distiller(palette = "Blues", direction = 1, 
+  scale_fill_distiller(palette = "Blues", direction = 1,
                        name = "PM2.5\n[ug/m3]") +
   coord_sf(xlim = c(crop_xmin, crop_xmax), ylim = c(crop_ymin, crop_ymax)) +
   theme_minimal() +
@@ -421,7 +429,11 @@ ggsave(plot = plot_ap_gg,
 
 # Print ctries over WHO guidelines
 print(ap_ctry_sf %>% dplyr::filter(overWHO) %>% dplyr::pull(ISO3) %>% unique())
+# [1] "ALB" "AUT" "BEL" "BGR" "CHE" "CZE" "DEU" "DNK" "ESP" "FRA" "GBR" "GRC" "HRV" "HUN" 
+# "ITA" "LIE" "LTU" "LUX" "MKD" "MLT" "MNE" "NLD" "POL" "PRT" "ROU" "SRB" "SVK" "SVN"
+
 print(ap_ctry_sf %>% dplyr::filter(!overWHO) %>% dplyr::pull(ISO3) %>% unique())
+# [1] "EST" "FIN" "IRL" "ISL" "LVA" "NOR" "SWE"
 
 ## DEATHS CTRY ----------------------------------------------------------------------
 deaths_ctryy <- deaths_ctry %>%
@@ -459,7 +471,7 @@ plot_deaths_gg <- ggplot() +
           color = "black",
           size = 0.05) + 
   scale_fill_distiller(palette = "Oranges", direction = 1, 
-                       name = "Premature Deaths\n[Deaths per 1M inhabitants]") +
+                       name = "Premature Deaths\n[deaths per 1M inhabitants]") +
   
   coord_sf(xlim = c(crop_xmin, crop_xmax), ylim = c(crop_ymin, crop_ymax)) +
   theme_minimal() +
@@ -482,6 +494,21 @@ ggsave(plot_deaths_gg,
        width = 14, height = 10, units = "cm")
 
 
+# Ranking ctries premature deaths
+dat_rank = deaths_ctry_sf %>% 
+  as.data.frame() %>% 
+  dplyr::group_by(ISO3, year) %>% 
+  dplyr::summarise(mean_deaths = mean(deaths, na.rm = T)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(mean_deaths)
+print(tail(dat_rank))
+# ISO3  year  mean_deaths
+# 1 SVK    2030        354.
+# 2 MNE    2030        381.
+# 3 HUN    2030        445.
+# 4 MKD    2030        447.
+# 5 SRB    2030        492.
+# 6 BGR    2030        510.
 
 ## AP vs urbn_type -------------------------------------------------------------
 ap_geo_urbn_type <- data.table::as.data.table(ap_socioecon_sf) %>%
@@ -590,7 +617,7 @@ plot_deaths_ap <- ggplot() +
     labels = quintiles.labs
   ) +
   theme_minimal() +
-  labs(x = "Premature deaths [Deaths per 1M inhabitants]", 
+  labs(x = "Premature deaths [deaths per 1M inhabitants]", 
        y = "PM2.5 concentration [µg/m³]",
        color = "Income quintiles", 
        shape = "Settlement Type") +
@@ -606,7 +633,7 @@ plot_deaths_ap <- ggplot() +
     legend.key.size = unit(1.5, "cm"),
     legend.title = element_text(size = legend.text.size+2),
     legend.text = element_text(size = legend.text.size)
-  )
+  ) + coord_flip()
 
 
 
@@ -614,11 +641,6 @@ ggsave(
   file = paste0("figures/plot_deaths_ap", normalized_tag, ".pdf"), height = 15, width = 20, units = "cm",
   plot = plot_deaths_ap
 )
-
-
-
-
-
 
 
 
@@ -700,11 +722,11 @@ ap_geo_income %>%
   )
 # quintile min_income max_income mean_income median_income sd_income     n
 # <fct>         <dbl>      <dbl>       <dbl>         <dbl>     <dbl> <int>
-# 1 1             2901.     13025.      10839.        11373.     2085.   246
-# 2 2            13057.     16203.      14740.        14812.      997.   246
-# 3 3            16210.     18104.      17138.        17107.      564.   246
-# 4 4            18123.     20570.      19273.        19172.      723.   246
-# 5 5            20571.     46866.      22843.        22129.     3192.   246
+# 1 1             4348.     11243.       9120.         9466.     1555.   236
+# 2 2            11245.     15550.      13408.        13107.     1430.   236
+# 3 3            15555.     17322.      16443.        16421.      510.   236
+# 4 4            17338.     19467.      18424.        18490.      641.   236
+# 5 5            19470.     31864.      21229.        20797.     1827.   235
 
 
 ## AP vs GINI -------------------------------------------------------------
@@ -873,11 +895,11 @@ ap_geo_per_elderly %>%
   )
 # quintile min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly     n
 # <fct>              <dbl>           <dbl>            <dbl>              <dbl>          <dbl> <int>
-# 1 1                 0.0276           0.175            0.135              0.147        0.0365    296
-# 2 2                 0.175            0.202            0.190              0.191        0.00779   296
-# 3 3                 0.202            0.222            0.212              0.212        0.00562   296
-# 4 4                 0.222            0.244            0.233              0.232        0.00630   295
-# 5 5                 0.244            0.354            0.266              0.261        0.0193    295
+# 1 1                 0.0586           0.182            0.157              0.164        0.0223    280
+# 2 2                 0.182            0.206            0.195              0.195        0.00649   280
+# 3 3                 0.206            0.224            0.215              0.215        0.00525   280
+# 4 4                 0.224            0.246            0.234              0.234        0.00608   279
+# 5 5                 0.246            0.354            0.267              0.262        0.0192    279
 
 
 
@@ -887,7 +909,7 @@ spacing_factor = 0.5; scl = 25
 deaths_geo_urbn_type <- data.table::as.data.table(deaths_socioecon_sf) %>%
   dplyr::select(geo, urbn_type, deaths)
 deaths_geo_urbn_type <- unique(deaths_geo_urbn_type) %>% 
-  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths > 0.15e+2) %>% 
   dplyr::mutate(quintile = urbn_type) %>% 
   dplyr::group_by(quintile) %>% 
   dplyr::mutate(c05 = quantile(deaths, 0.05),
@@ -899,10 +921,11 @@ deaths_geo_urbn_type <- unique(deaths_geo_urbn_type) %>%
 
 
 plot_deaths_urbn_type <- prob_jitter_plot(deaths_geo_urbn_type %>% 
-                                            dplyr::rename(item = deaths), 
+                                            dplyr::rename(item = deaths) %>% 
+                                            dplyr::filter(item > 0.15e+2), 
                                           legend_title = 'Urban type', 
                                           legend_type = 'urbn_type',
-                                          ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
+                                          ox_text = 'Premature deaths [deaths per 1M inhabitants]')
 ggsave(
   file = paste0("figures/plot_deaths_urbn_type.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_deaths_urbn_type[[1]]
@@ -928,9 +951,9 @@ deaths_geo_urbn_type %>%
   )
 # quintile    min_deaths max_deaths mean_deaths median_deaths sd_deaths     n
 # <fct>            <dbl>      <dbl>       <dbl>         <dbl>     <dbl> <int>
-# 1 City             20.6        686.        285.          294.      83.8   371
-# 2 Town/Suburb       7.88       755.        325.          320.     125.    585
-# 3 Rural             2.31       759.        302.          307.     116.    428
+# 1 City              76.8       515.        247.          254.      68.5   368
+# 2 Town/Suburb       20.1       610.        276.          275.      98.7   574
+# 3 Rural             15.3       624.        252.          261.      91.5   411
 
 
 
@@ -939,7 +962,7 @@ deaths_geo_urbn_type %>%
 deaths_geo_gini <- data.table::as.data.table(deaths_socioecon_sf) %>%
   dplyr::select(geo, gini, deaths)
 deaths_geo_gini <- unique(deaths_geo_gini) %>% 
-  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths > 0.15e+2) %>% 
   dplyr::mutate(quintile = as.factor(dplyr::ntile(gini, split_num))) %>% 
   dplyr::group_by(quintile) %>% 
   dplyr::mutate(c05 = quantile(deaths, 0.05),
@@ -951,10 +974,11 @@ deaths_geo_gini <- unique(deaths_geo_gini) %>%
 
 
 plot_deaths_gini <- prob_jitter_plot(deaths_geo_gini %>% 
-                                       dplyr::rename(item = deaths), 
+                                       dplyr::rename(item = deaths) %>% 
+                                       dplyr::filter(item > 0.15e+2), 
                                      legend_title = 'Gini quintiles', 
                                      legend_type = 'quintiles_v3',
-                                     ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
+                                     ox_text = 'Premature deaths [deaths per 1M inhabitants]')
 ggsave(
   file = paste0("figures/plot_deaths_gini.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_deaths_gini[[1]]
@@ -981,11 +1005,11 @@ deaths_geo_gini %>%
   )
 # quintile min_gini max_gini mean_gini median_gini sd_gini     n
 # <fct>       <dbl>    <dbl>     <dbl>       <dbl>   <dbl> <int>
-# 1 1           0.204    0.285     0.270       0.271 0.0129    629
-# 2 2           0.285    0.299     0.292       0.291 0.00355   629
-# 3 3           0.299    0.312     0.305       0.306 0.00392   628
-# 4 4           0.312    0.348     0.327       0.327 0.0112    628
-# 5 5           0.348    0.553     0.387       0.380 0.0402    628
+# 1 1           0.204    0.287     0.271       0.273 0.0128    205
+# 2 2           0.287    0.3       0.293       0.292 0.00374   205
+# 3 3           0.3      0.313     0.306       0.307 0.00391   204
+# 4 4           0.313    0.348     0.329       0.329 0.0113    204
+# 5 5           0.348    0.553     0.388       0.381 0.0403    204
 
 
 
@@ -994,7 +1018,7 @@ deaths_geo_gini %>%
 deaths_geo_income <- data.table::as.data.table(deaths_socioecon_sf) %>%
   dplyr::select(geo, income, deaths)
 deaths_geo_income <- unique(deaths_geo_income) %>% 
-  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths > 0.15e+2) %>% 
   dplyr::mutate(quintile = as.factor(dplyr::ntile(income, split_num))) %>% 
   dplyr::group_by(quintile) %>% 
   dplyr::mutate(c05 = quantile(deaths, 0.05),
@@ -1005,10 +1029,11 @@ deaths_geo_income <- unique(deaths_geo_income) %>%
   dplyr::ungroup()
 
 plot_deaths_income <- prob_jitter_plot(deaths_geo_income %>% 
-                                         dplyr::rename(item = deaths), 
+                                         dplyr::rename(item = deaths) %>% 
+                                         dplyr::filter(item > 0.15e+2), 
                                        legend_title = 'Income quintiles', 
                                        legend_type = 'quintiles',
-                                       ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
+                                       ox_text = 'Premature deaths [deaths per 1M inhabitants]')
 
 ggsave(
   file = paste0("figures/plot_deaths_income.pdf"), height = 10, width = 18, units = "cm",
@@ -1035,11 +1060,11 @@ deaths_geo_income %>%
   )
 # quintile min_income max_income mean_income median_income sd_income     n
 # <fct>         <dbl>      <dbl>       <dbl>         <dbl>     <dbl> <int>
-# 1 1             2901.     13015.      10823.        11337.     2087.   244
-# 2 2            13025.     16210.      14728.        14787.     1006.   244
-# 3 3            16223.     18125.      17145.        17120.      567.   244
-# 4 4            18153.     20571.      19296.        19241.      719.   243
-# 5 5            20585.     46866.      22849.        22122.     3207.   243
+# 1 1             4348.     11168.       9085.         9466.     1555.   228
+# 2 2            11195.     15666.      13427.        13073.     1522.   228
+# 3 3            15678.     17393.      16521.        16540.      501.   228
+# 4 4            17397.     19524.      18509.        18563.      626.   228
+# 5 5            19530.     31864.      21287.        20920.     1832.   227
 
 
 
@@ -1048,7 +1073,7 @@ deaths_geo_income %>%
 deaths_geo_per_elderly <- data.table::as.data.table(deaths_socioecon_sf) %>%
   dplyr::select(geo, per_elderly, deaths)
 deaths_geo_per_elderly <- unique(deaths_geo_per_elderly) %>% 
-  dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>% 
+  dplyr::filter(rowSums(is.na(.)) == 0, deaths > 0.15e+2) %>% 
   dplyr::mutate(quintile = as.factor(dplyr::ntile(per_elderly, split_num))) %>% 
   dplyr::group_by(quintile) %>% 
   dplyr::mutate(c05 = quantile(deaths, 0.05),
@@ -1060,10 +1085,11 @@ deaths_geo_per_elderly <- unique(deaths_geo_per_elderly) %>%
 
 
 plot_deaths_per_elderly <- prob_jitter_plot(deaths_geo_per_elderly %>% 
-                                              dplyr::rename(item = deaths), 
+                                              dplyr::rename(item = deaths) %>% 
+                                              dplyr::filter(item > 0.15e+2), 
                                             legend_title = 'Elderly proportion\nquintiles', 
                                             legend_type = 'quintiles_v2',
-                                            ox_text = 'Premature deaths [Deaths per 1M inhabitants]')
+                                            ox_text = 'Premature deaths [deaths per 1M inhabitants]')
 ggsave(
   file = paste0("figures/plot_deaths_per_elderly.pdf"), height = 10, width = 18, units = "cm",
   plot = plot_deaths_per_elderly[[1]]
@@ -1089,11 +1115,11 @@ deaths_geo_per_elderly %>%
   )
 # quintile min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly     n
 # <fct>              <dbl>           <dbl>            <dbl>              <dbl>          <dbl> <int>
-# 1 1                 0.0586           0.182            0.157              0.164        0.0224    277
-# 2 2                 0.182            0.206            0.195              0.195        0.00649   277
-# 3 3                 0.206            0.224            0.215              0.215        0.00520   277
-# 4 4                 0.224            0.246            0.234              0.234        0.00613   277
-# 5 5                 0.246            0.354            0.267              0.262        0.0193    276
+# 1 1                 0.0586           0.182            0.157              0.165        0.0226    271
+# 2 2                 0.182            0.206            0.195              0.195        0.00643   271
+# 3 3                 0.206            0.224            0.215              0.215        0.00515   271
+# 4 4                 0.224            0.245            0.234              0.234        0.00611   270
+# 5 5                 0.245            0.354            0.267              0.261        0.0194    270
 
 
 ## GRID AP vs DEATHS SCATTERPLOT  ---------------------------------------------------
@@ -1173,7 +1199,7 @@ plot_deaths_ap_grid <- ggplot() +
     labels = quintiles.labs
   ) +
   theme_minimal() +
-  labs(x = "Premature mortality rate [per grid cell]", 
+  labs(x = "Premature mortality rate [per 1M inhabitants, per grid cell]", 
        y = "PM2.5 concentration [µg/m³]",
        color = "Income quintiles", 
        shape = "Settlement Type") +
@@ -1189,7 +1215,7 @@ plot_deaths_ap_grid <- ggplot() +
     legend.key.size = unit(1.5, "cm"),
     legend.title = element_text(size = legend.text.size+2),
     legend.text = element_text(size = legend.text.size)
-  )
+  ) + coord_flip()
 
 
 
@@ -1323,7 +1349,7 @@ ggsave(
 
 df <- data.table::as.data.table(ap_grid_urbn_sample) %>% 
   dplyr::rename("urbn_type" = "quintile") %>% 
-  dplyr::mutate(urbn_type = factor(urbn_type, levels = c('3','1','2')))
+  dplyr::mutate(urbn_type = factor(urbn_type, levels = c('City','Rural','Town/Suburb')))
 df_medi <- df[, .(medi = quantile(ap, 0.5, na.rm = T)),
               by = c("urbn_type")
 ]
@@ -1340,17 +1366,17 @@ plot_urbntype_density <- ggplot(df) +
   geom_vline(aes(color = urbn_type, xintercept = medi),
              data = df_medi, linewidth = 1
   ) +
-  facet_wrap(. ~ urbn_type, nrow = 3, labeller = as_labeller(c("3"="City", "2"="Town/Suburb", "1"="Rural"))) +
+  facet_wrap(. ~ urbn_type, nrow = 3) +
   ggpubr::theme_pubr() +
   scale_color_manual(
-    values = urbn_type.color.num,
+    values = urbn_type.color,
     name = "Urban type",
-    labels = urbn_type.labs.num
+    labels = urbn_type.labs
   ) +
   scale_fill_manual(
-    values = urbn_type.color.num,
+    values = urbn_type.color,
     name = "Urban type",
-    labels = urbn_type.labs.num
+    labels = urbn_type.labs
   ) +
   labs(x = "PM2.5 concentration [ug/m3]", y = "Probability density") +
   theme(
@@ -1601,11 +1627,11 @@ ap_grid_per_elderly %>%
   )
 # quintile min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly     n
 # <fct>       <dbl>    <dbl>     <dbl>       <dbl>   <dbl> <int>
-# 1 1               2.76e-29           0.144           0.0899              0.103         0.0447 614074
-# 2 2               1.44e- 1           0.193           0.170               0.170         0.0139 614074
-# 3 3               1.93e- 1           0.237           0.215               0.214         0.0128 614074
-# 4 4               2.37e- 1           0.306           0.268               0.266         0.0195 614074
-# 5 5               3.06e- 1           1.00            0.437               0.385         0.141  614073
+# 1 1           0.0000000251           0.149            0.103              0.113         0.0378 625414
+# 2 2           0.149                  0.196            0.174              0.174         0.0135 625413
+# 3 3           0.196                  0.241            0.218              0.218         0.0130 625413
+# 4 4           0.241                  0.314            0.273              0.271         0.0205 625413
+# 5 5           0.314                  1.000            0.449              0.397         0.143  625413
 
 
 
@@ -1674,7 +1700,7 @@ df_mort_urbn <- data.frame(pm_mort = pm_values[valid_idx],
                            urbn_type = urbn_values[valid_idx],
                            ctry_names = ctry_values[valid_idx])
 
-df_mort_urbn_no0 <- df_mort_urbn[df_mort_urbn$pm_mort > 0,]
+df_mort_urbn_no0 <- df_mort_urbn[df_mort_urbn$pm_mort > 0.15e+2,]
 df_mort_urbn_no0 <- df_mort_urbn_no0[df_mort_urbn_no0$urbn_type > 0,]
 df_mort_urbn_no0 <- unique(df_mort_urbn_no0) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0)
@@ -1721,16 +1747,14 @@ deaths_grid_urbn_sample_ctry <- deaths_grid_urbn %>%
 # plots ------------------------------------------------------------------------
 plot_grid_deaths_urbn <- prob_jitter_plot(deaths_grid_urbn_sample %>% 
                                             dplyr::rename(item = deaths) %>% 
-                                            dplyr::filter(item < 4), 
+                                            dplyr::filter(item > 25), 
                                           legend_title = 'Urban type',
                                           legend_type = 'urbn_type',
                                           ox_text = dplyr::if_else(normalized,
-                                                                   'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
+                                                                   'Premature mortality rate [per 1M inhabitants, per grid cell]',# per 1km\u00B2 grid cell]',
                                                                    'Premature deaths [absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
-plot_grid_deaths_urbn[[1]] <- plot_grid_deaths_urbn[[1]] +
-  scale_x_continuous(labels = scales::scientific)
-plot_grid_deaths_urbn[[2]] <- plot_grid_deaths_urbn[[2]] +
-  scale_x_continuous(labels = scales::scientific)
+plot_grid_deaths_urbn[[1]] <- plot_grid_deaths_urbn[[1]]
+plot_grid_deaths_urbn[[2]] <- plot_grid_deaths_urbn[[2]]
 
 ggsave(
   file = paste0("figures/plot_grid_deaths_urbn",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
@@ -1746,55 +1770,6 @@ ggsave(
   file = paste0("figures/plot_grid_deaths_urbn_text",norm_grid_tag,".png"), height = 10, width = 18, units = "cm",
   plot = plot_grid_deaths_urbn[[2]] + theme(legend.position = 'none'), dpi = 300,
   bg = 'white'
-)
-
-plot_urbntype_density <- ggplot(df_mort_urbn_no0 %>% 
-                                  dplyr::filter(pm_mort < 5),
-                                aes(x = pm_mort, 
-                                    color = as.factor(urbn_type),
-                                    fill = as.factor(urbn_type))) +
-  geom_density(alpha = 0.5) +
-  geom_vline(aes(color = as.factor(urbn_type), xintercept = medi),
-             data = df_medi, linewidth = 1
-  ) +
-  facet_grid(as.factor(urbn_type) ~ ., scales = 'free') +
-  scale_fill_manual(
-    values = urbn_type.color.num,
-    name = "Urban type",
-    labels = urbn_type.labs.num
-  ) +
-  scale_color_manual(
-    values = urbn_type.color.num,
-    name = "Urban type",
-    labels = urbn_type.labs.num
-  ) +
-  labs(
-    x = dplyr::if_else(normalized,
-                       'Premature deaths [Population-Normalized per 1km\u00B2 grid cell]',
-                       'Premature deaths [Deaths per 1km\u00B2 grid cell]'),
-    y = "Density"
-  ) +
-  ggpubr::theme_pubr() +
-  theme(
-    panel.background = element_rect(fill = "white"),
-    panel.grid.major = element_line(colour = "grey90"),
-    panel.ontop = FALSE,
-    strip.text = element_text(size = legend.text.size),
-    strip.background = element_blank(),
-    axis.title = element_text(size = legend.text.size),
-    axis.title.y = element_blank(),
-    axis.text = element_text(size = legend.text.size),
-    # axis.text.y = element_blank(),
-    # axis.ticks = element_blank(),
-    axis.line = element_blank(),
-    legend.key.size = unit(0.6, "cm"),
-    legend.title = element_text(size = legend.text.size),
-    legend.text = element_text(size = legend.text.size),
-  )
-
-ggsave(
-  file = paste0("figures/plot_grid_mort_urbntype_density",norm_grid_tag,".pdf"), height = 12, width = 18, units = "cm",
-  plot = plot_urbntype_density
 )
 
 
@@ -1818,7 +1793,7 @@ pl <- ggplot(df_mort_urbn_no0_ctry,
   scale_x_continuous(labels = sci_formatter) +
   theme_minimal() +
   labs(y = "ECDF",
-       x = "Premature mortality rate [per grid cell]") +
+       x = "Premature mortality rate [per 1M inhabitants, per grid cell]") +
   theme(
     panel.background = element_rect(fill = "white", color = "white"),
     panel.grid.major = element_line(colour = "grey90"),
@@ -1855,7 +1830,7 @@ df_mort_inc <- data.frame(pm_mort = pm_values[valid_idx],
                           inc_per_capita = inc_values[valid_idx],
                           ctry_names = ctry_values[valid_idx])
 
-df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort > 0.15e-4,]
+df_mort_inc_no0 <- df_mort_inc[df_mort_inc$pm_mort > 0.15e+2,]
 df_mort_inc_no0 <- df_mort_inc_no0[df_mort_inc_no0$inc_per_capita > 0,]
 df_mort_inc_no0 <- unique(df_mort_inc_no0) %>% 
   dplyr::mutate(quintile_5 = as.factor(dplyr::ntile(inc_per_capita, 5))) %>% 
@@ -1898,11 +1873,11 @@ deaths_grid_income_sample_ctry <- deaths_grid_income %>%
 # plots ------------------------------------------------------------------------
 plot_grid_deaths_income <- prob_jitter_plot(deaths_grid_income_sample %>% 
                                               dplyr::rename(item = deaths) %>% 
-                                              dplyr::filter(item < 0.4), 
+                                              dplyr::filter(item > 25), 
                                             legend_title = 'Income quintiles',
                                             legend_type = 'quintiles',
                                             ox_text = dplyr::if_else(normalized,
-                                                                     'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
+                                                                     'Premature mortality rate [per 1M inhabitants, per grid cell]',# per 1km\u00B2 grid cell]',
                                                                      'Premature deaths [absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 ggsave(
   file = paste0("figures/plot_grid_deaths_income",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
@@ -1930,11 +1905,11 @@ deaths_grid_income %>%
   )
 # quintile min_income max_income mean_income median_income sd_income      n
 # <fct>         <dbl>      <dbl>       <dbl>         <dbl>     <dbl>  <int>
-# 1 1             2039.      9051.       7206.         7496.     1382. 832628
-# 2 2             9051.     11970.      10394.        10318.      823. 832627
-# 3 3            11970.     15090.      13809.        13987.      911. 832627
-# 4 4            15090.     17023.      15996.        15972.      541. 832627
-# 5 5            17023.    191019.      19302.        18830.     2197. 832627
+# 1 1             2039.      9109.       7237.         7538.     1397. 838051
+# 2 2             9109.     11697.      10334.        10291.      717. 844552
+# 3 3            11697.     15018.      13625.        13815.      990. 845630
+# 4 4            15018.     16978.      15944.        15923.      549. 846439
+# 5 5            16978.    191019.      19263.        18791.     2198. 846448
 
 df_medi <- df_mort_inc_no0 %>%
   dplyr::group_by(quintile_5) %>%
@@ -2005,7 +1980,7 @@ df_mort_eld <- data.frame(pm_mort = pm_values[valid_idx],
                           pop_elderly_per = pop_elderly[valid_idx],
                           ctry_names = ctry_values[valid_idx])
 
-df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0.15e-4,]
+df_mort_eld_no0 <- df_mort_eld[df_mort_eld$pm_mort > 0.15e+2,]
 df_mort_eld_no0 <- df_mort_eld_no0[df_mort_eld_no0$pop_elderly_per > 0,]
 df_mort_eld_no0 <- unique(df_mort_eld_no0) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
@@ -2048,11 +2023,11 @@ deaths_grid_per_elderly_sample_ctry <- deaths_grid_per_elderly %>%
 # plots ------------------------------------------------------------------------
 plot_grid_deaths_per_elderly <- prob_jitter_plot(deaths_grid_per_elderly_sample %>% 
                                                    dplyr::rename(item = deaths) %>% 
-                                                   dplyr::filter(item < 0.5), 
+                                                   dplyr::filter(item > 25), 
                                                  legend_title = 'Elderly proportion\nquintiles', 
                                                  legend_type = 'quintiles_v2',
                                                  ox_text = dplyr::if_else(normalized,
-                                                                          'Premature mortality rate [per grid cell]',# per 1km\u00B2 grid cell]',
+                                                                          'Premature mortality rate [per 1M inhabitants, per grid cell]',# per 1km\u00B2 grid cell]',
                                                                           'Premature deaths [absolute number]'))#Deaths per 1km\u00B2 grid cell]'))
 ggsave(
   file = paste0("figures/plot_grid_deaths_per_elderly",norm_grid_tag,".pdf"), height = 10, width = 18, units = "cm",
@@ -2080,11 +2055,11 @@ deaths_grid_per_elderly %>%
   )
 # quintile min_per_elderly max_per_elderly mean_per_elderly median_per_elderly sd_per_elderly      n
 # <fct>              <dbl>           <dbl>            <dbl>              <dbl>          <dbl>  <int>
-# 1 1               2.43e-40           0.143           0.0898              0.103         0.0445 612460
-# 2 2               1.43e- 1           0.191           0.169               0.169         0.0137 612459
-# 3 3               1.91e- 1           0.236           0.213               0.213         0.0127 612459
-# 4 4               2.36e- 1           0.303           0.265               0.263         0.0191 612459
-# 5 5               3.03e- 1           1.00            0.440               0.381         0.158  612459
+# 1 1           0.0000000251           0.150            0.104              0.114         0.0370 578779
+# 2 2           0.150                  0.195            0.173              0.174         0.0130 578779
+# 3 3           0.195                  0.238            0.216              0.216         0.0124 578779
+# 4 4           0.238                  0.305            0.268              0.266         0.0188 578779
+# 5 5           0.305                  1.000            0.425              0.378         0.130  578779
 
 df_medi <- df_mort_eld_no0 %>%
   dplyr::group_by(quintile_5) %>%
@@ -2153,7 +2128,7 @@ grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_gri
                                  top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_urbn_type.png")), 
                                  top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_urbn.png")), 
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_urbn",norm_grid_tag,".png"))), 
                                  top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
@@ -2174,7 +2149,7 @@ grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_gri
                                  top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_urbn_type_text.png")), 
                                  top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_urbn_text.png")), 
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_urbn_text",norm_grid_tag,".png"))), 
                                  top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
@@ -2196,7 +2171,7 @@ grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_gri
                                  top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_income.png")), 
                                  top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_income.png")), 
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_income",norm_grid_tag,".png"))),
                                  top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
@@ -2217,7 +2192,7 @@ grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_gri
                                  top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_income_text.png")), 
                                  top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_income_text.png")), 
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_income_text",norm_grid_tag,".png"))),
                                  top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
@@ -2239,7 +2214,7 @@ grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_gri
                                  top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_per_elderly.png")), 
                                  top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_per_elderly.png")), 
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_per_elderly",norm_grid_tag,".png"))), 
                                  top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
@@ -2260,7 +2235,7 @@ grob_b <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_gri
                                  top = grid::textGrob("b)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 grob_c <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_deaths_per_elderly_text.png")), 
                                  top = grid::textGrob("c)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
-grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG("figures/plot_grid_deaths_per_elderly_text.png")), 
+grob_d <- gridExtra::arrangeGrob(grid::rasterGrob(png::readPNG(paste0("figures/plot_grid_deaths_per_elderly_text",norm_grid_tag,".png"))), 
                                  top = grid::textGrob("d)", x = unit(0, "npc"), just = "left", gp = grid::gpar(fontface = "bold", cex = 1)))
 
 pl <- gridExtra::grid.arrange(grob_a, grob_b, grob_c, grob_d, ncol = 2)
@@ -2624,7 +2599,7 @@ data <- deaths_income_medi %>%
 
 ml_do_all(data, 2, 'withinCtry/ml_income_nuts3',
           fig_legend = "Income\nper capita\nquintile",
-          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
+          fig_ox_label = "Premature Deaths [deaths per 1M inhabitants]",
           type = 'deaths')
 
 
@@ -2650,7 +2625,7 @@ data <- deaths_elderly_medi %>%
 
 ml_do_all(data, 2, 'withinCtry/ml_elderly_nuts3',
           fig_legend = "Elderly\nproportion\nquintile",
-          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]",
+          fig_ox_label = "Premature Deaths [deaths per 1M inhabitants]",
           type = 'deaths')
 
 ## DEATHS vs GINI ------------------------------------------------------------------
@@ -2675,7 +2650,7 @@ data <- deaths_gini_medi %>%
 
 ml_do_all(data, 4, 'withinCtry/ml_gini_nuts3',
           fig_legend = "Gini\nindex\nquintile",type = 'deaths',
-          fig_ox_label = "Premature Deaths [Deaths per 1M inhabitants]")  
+          fig_ox_label = "Premature Deaths [deaths per 1M inhabitants]")  
 
 
 ## DEATHS vs URBN TYPE -------------------------------------------------------------
@@ -2720,7 +2695,7 @@ data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("q
 data$variable <- factor(data$variable, levels = c("urbn", "income", "elderly", "gini"))
 
 # Plotting
-pl <- do_plot_within(data, "Premature Deaths [Deaths per 1M inhabitants]", type = 'nuts3')
+pl <- do_plot_within(data, "Premature Deaths [deaths per 1M inhabitants]", type = 'nuts3')
 ggsave(
   file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,".pdf"), 
   height = 18, width = 18, units = "cm",
@@ -2839,7 +2814,7 @@ data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("q
   dplyr::filter(country_name != 'Turkey') # not in EU+
 data$variable <- factor(data$variable, levels = c("urbn", "income", "elderly"))
 
-pl <- do_plot_within(data, "PM2.5 concentration [ug/m3]", type = 'grid')
+pl <- do_plot_within(data, "PM2.5 concentration [ug/m3]", type = 'grid_ap')
 
 ggsave(
   file = paste0("figures/withinCtry/fig_ap_var_",yy,"_",split_num_tag,"_grid.pdf"), 
@@ -2866,6 +2841,7 @@ deaths_income_medi <- data.table::as.data.table(deaths_grid_income_sample_ctry) 
   dplyr::ungroup()
 
 data <- deaths_income_medi %>%
+  dplyr::mutate(medi = medi * 100) %>% 
   tibble::as_tibble() %>% 
   dplyr::mutate(quintile = paste0('Q',quintile)) %>%
   dplyr::arrange(quintile, ctry) %>% 
@@ -2875,7 +2851,7 @@ data <- deaths_income_medi %>%
 
 ml_do_all(data, 8, 'withinCtry/ml_income_grid',
           fig_legend = "Income\nper capita\nquintile",
-          fig_ox_label = "Premature mortality rate [per grid cell]",
+          fig_ox_label = "Premature mortality rate [per 1M inhabitants, per grid cell]",
           type = 'deaths')
 
 ## GRID - DEATHS vs ELDERLY --------------------------------------------------------------
@@ -2891,6 +2867,7 @@ deaths_elderly_medi <- data.table::as.data.table(deaths_grid_per_elderly_sample_
   dplyr::ungroup()
 
 data <- deaths_elderly_medi %>%
+  dplyr::mutate(medi = medi * 100) %>% 
   tibble::as_tibble() %>% 
   dplyr::mutate(quintile = paste0('Q',quintile)) %>%
   dplyr::arrange(quintile, ctry) %>% 
@@ -2900,7 +2877,7 @@ data <- deaths_elderly_medi %>%
 
 ml_do_all(data, 3, 'withinCtry/ml_elderly_grid',
           fig_legend = "Elderly\nproportion\nquintile",
-          fig_ox_label = "Premature mortality rate [per grid cell]",
+          fig_ox_label = "Premature mortality rate [per 1M inhabitants, per grid cell]",
           type = 'deaths')
 
 
@@ -2911,15 +2888,18 @@ deaths_urbntype_medi <- data.table::as.data.table(deaths_grid_urbn_sample_ctry) 
   dplyr::filter(rowSums(is.na(.)) == 0, deaths != 0) %>%
   dplyr::group_by(urbn_type, ctry) %>% 
   dplyr::summarise(medi = quantile(deaths, 0.50)) %>% 
-  dplyr::ungroup()
+  dplyr::ungroup() %>% 
+  dplyr::mutate(medi = medi * 100) 
 
 
 ## GRID - DEATHS - figure -----------------------------------------------------------------
 data_list <- list(
   deaths_income_medi %>%
+    dplyr::mutate(medi = medi * 100) %>% 
     dplyr::rename_with(~ "income", contains("medi")),
   
   deaths_elderly_medi %>%
+    dplyr::mutate(medi = medi * 100) %>% 
     dplyr::rename_with(~ "elderly", contains("medi"))
 )
 
@@ -2939,7 +2919,7 @@ data <- purrr::reduce(data_list, function(x, y) dplyr::full_join(x, y, by = c("q
 data$variable <- factor(data$variable, levels = c("urbn", "income", "elderly"))
 
 # Plotting
-pl <- do_plot_within(data, "Premature mortality rate [per grid cell]", type = 'grid')
+pl <- do_plot_within(data, "Premature mortality rate [per 1M inhabitants, per grid cell]", type = 'grid_deaths')
 ggsave(
   file = paste0("figures/withinCtry/fig_deaths_var_",yy,"_",split_num_tag,"_grid.pdf"), height = 12, width = 18, units = "cm",
   plot = pl
@@ -3023,7 +3003,7 @@ df_cells_no0 <- df_cells
 df_cells_no0 <- df_cells_no0[df_cells_no0$urbn_type > 0,]
 df_cells_no0 <- df_cells_no0[df_cells_no0$inc_per_capita > 0,]
 df_cells_no0 <- df_cells_no0[df_cells_no0$pop_elderly_per > 0,]
-df_cells_no0 <- df_cells_no0[df_cells_no0$pm.mort > 0.15e-4,]
+df_cells_no0 <- df_cells_no0[df_cells_no0$pm.mort > 0.15e+2,]
 
 df_cells_no0 <- unique(df_cells_no0) %>% 
   dplyr::filter(rowSums(is.na(.)) == 0, is.finite(pop_elderly_per), pop_elderly_per < 1) %>% 
@@ -3116,6 +3096,12 @@ ggsave(
 ## MAP settlement type by grid cell -------------------------------------------
 urbn_raster_masked <- terra::classify(urbn_raster_combined_filtered,
                                       rcl = matrix(c(0, NA), ncol = 2, byrow = TRUE))
+# classification_layer       n
+#                    0     176
+#                    1 4938521
+#                    2   22661
+#                    3   70326
+
 
 pdf(paste0("figures/","plot_grid_urb_quintiles.pdf"), width = 11/2.54, height = 10/2.54)
 par(mar = c(0,0,0,0), xpd = NA)
@@ -3123,6 +3109,7 @@ r <- raster::raster(urbn_raster_masked)
 r <- raster::mask(r, as(turkey, "Spatial"), inverse = TRUE) # remove Turkey from the map
 terra::plot(r, 
             col = rev(urbn_type.color.num),
+            breaks = seq(0.5, 3.5, by = 1),
             legend = FALSE, 
             axes = FALSE, 
             box = FALSE)
@@ -3236,7 +3223,7 @@ do_map_between_socioecon(elderly_RURAL_filtered,
 
 
 ## MAP within income quintiles by grid cell  ------------------------------------------
-raster_filtered <- inc_raster_filtered
+raster_filtered <- inc_pc_20152_filtered
 names(raster_filtered) = 'value'
 do_map_within_socioecon(
   raster_filtered,
@@ -3706,3 +3693,117 @@ plot <- ggplot() +
 ggsave(plot,
        filename = paste0("figures/plot_nuts3_wihtin_deaths.pdf"),
        width = 11, height = 10, units = "cm")
+
+
+
+######################################################################## DIAGNOSTIC FIGURES ####
+# rfasst PM2.5 wegihts
+pdf("figures/pm_weights.pdf", width = 14.5/2.54, height = 10/2.54)
+par(mar = c(0,0,0,0))
+r <- raster::raster(pm.weights_raster2)
+terra::plot(r, 
+            legend = FALSE, 
+            axes = FALSE, 
+            box = FALSE)
+r.range <- c(raster::minValue(r), raster::maxValue(r))
+terra::plot(r, legend.only=TRUE,     
+            legend.width=1, legend.shrink=0.65,
+            frame.plot = F,
+            axis.args=list(font=1,
+                           cex.axis=legend.text.size.raster),
+            legend.args=list(text='PM2.5\nweight', side=3, font=1, line=0.5, cex=legend.title.size.raster))
+dev.off()
+
+
+# Emissions Figures
+emiss_data <- rgcam::getQuery(prj, 'CO2 emissions by sector (excluding resource production)') %>% 
+  dplyr::mutate(ghg = 'CO2') %>% 
+  rbind(rgcam::getQuery(prj, 'nonCO2 emissions by sector (excluding resource production)')) %>% 
+  dplyr::left_join(sector_map, by = 'sector') %>% 
+  dplyr::filter(!is.na(agg_sector),
+                year >= 2015, year <= 2030) %>% 
+  dplyr::left_join(ghg_map, by = 'ghg') %>% 
+  dplyr::group_by(scenario, region, sector = agg_sector, Units, year, ghg = agg_ghg) %>% 
+  dplyr::summarise(value = sum(value)) %>% 
+  dplyr::ungroup() %>% 
+  rename_scen() %>% 
+  dplyr::mutate(ghg = dplyr::if_else(ghg == 'NMVOC', 'VOC', ghg))
+
+# Baseline vs POLICY55 - by ghg - by timeline
+emiss_data_timeline <- emiss_data %>% 
+  dplyr::filter(ghg %in% sel_ghg) %>% 
+  dplyr::group_by(scenario, year, ghg) %>% 
+  dplyr::summarise(value = sum(value)) %>% 
+  dplyr::ungroup()
+
+plot_d_timeline <- ggplot(emiss_data_timeline,
+                          aes(x = year, y = value, color = scenario)) +
+  geom_line(linewidth = 1.1) +
+  labs(title = "", y = "Emissions", x = "") +
+  scale_color_manual(values = pal_sce, name = 'Scenario') +
+  theme_minimal(base_size = 10) +
+  ylim(0, NA) +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(size = 8),
+    plot.title = element_text(face = "bold", size = 12),
+    axis.title.y = element_text(size = 10),
+    axis.title.x = element_text(size = 10),
+    axis.text = element_text(size = 8)
+  ) +
+  facet_wrap(~ghg, scales = "free_y")
+
+ggsave(plot_d_timeline,
+       filename = paste0("figures/plot_d_timeline.pdf"),
+       width = 10,
+       height = 8,
+       dpi = 300)
+
+# POLICY55 - by ghg - by sector
+emiss_data_sec <- emiss_data %>% 
+  dplyr::filter(ghg %in% sel_ghg,
+                year == 2030) %>% 
+  dplyr::group_by(scenario, sector, ghg) %>% 
+  dplyr::summarise(value = sum(value)) %>% 
+  dplyr::ungroup() %>% 
+  rename_sec()
+
+plot_d_sec <- ggplot(emiss_data_sec,
+               aes(x = scenario, y = value, fill = sector)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.6) +
+  labs(title = "", y = "Emissions", x = "") +
+  scale_fill_manual(values = pal_sec, name = 'Sector') +
+  theme_minimal(base_size = 10) +
+  ylim(0, NA) +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(size = 8),
+    plot.title = element_text(face = "bold", size = 12),
+    axis.title.y = element_text(size = 10),
+    axis.title.x = element_text(size = 10),
+    axis.text = element_text(size = 8)
+  ) +
+  facet_wrap(~ghg, scales = "free_y")
+
+ggsave(plot_d_sec,
+       filename = paste0("figures/plot_d_sec.pdf"),
+       width = 10,
+       height = 8,
+       dpi = 300)
+
+# joint fig
+plot_d_emiss <- plot_grid(ggdraw() +
+                            draw_plot(plot_d_timeline, y = 0.05, height = 1),
+                          ggdraw() +
+                            draw_plot(plot_d_sec, y = 0.005, height = 1) +
+                            draw_label("a)", x = 0, hjust = 0, vjust = -92, fontface = "bold", size = 11) +
+                            draw_label("b)", x = 0, hjust = 0, vjust = -41, fontface = "bold", size = 11),
+                          ncol = 1, rel_heights = c(1, 1.75)
+)
+
+ggsave(plot_d_emiss,
+       filename = paste0("figures/plot_d_emiss.pdf"),
+       width = 10,
+       height = 15,
+       dpi = 300)
+

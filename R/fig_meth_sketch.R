@@ -5,7 +5,7 @@
 # Author                : Clàudia Rodés-Bachs
 # Institute             : BC3-Basque Centre for Climate Change
 # Description           : Analysis and figures' generation code 
-# Re-usage instructions : Execute this R script placing the data in the 'data' folder
+# Re-usage instructions : Execute this R script through the main.R script (to properly load all data and helper functions)
 
 ###############################################################################
 
@@ -53,7 +53,7 @@ if (map) {
 
 
 # PM2.5 grid level
-pm25_weighted <- terra::rast("data/rfasst_output/EU_NECP_LTT_2030_pm25_fin_weighted.tif")
+pm25_weighted <- terra::rast("data/rfasst_output/EU_NECP_LTT-Rev1.1_2030_pm25_fin_weighted.tif")
 png(filename = "figures/meth_sketch/plot_ap_grid_w.png",
     width = 100 * 3, height = 50 * 3, units = "mm", res = 300)
 terra::plot(pm25_weighted, col = grDevices::terrain.colors(50), axes = FALSE, box = FALSE, legend = FALSE)
@@ -61,7 +61,9 @@ dev.off()
 
 
 # PM2.5 regional level
-pm25_regional <- get(load("data/rfasst_output/necp_m2_get_conc_pm25.ctry_agg.output.RData"))
+pm25_regional <- read.csv("data/rfasst_output/EU_NECP_LTT-Rev1.1_2030_WORLD-NUTS3_pm25_avg.csv") %>%
+  dplyr::rename(region = id_code,
+                value = pm25_avg)
 
 pm25_regional <- as.data.frame(rmap::mapCountries) %>%
   dplyr::mutate(subRegionAlt=as.character(subRegionAlt)) %>%
@@ -141,10 +143,10 @@ if (map) {
 
 extent_raster <- terra::ext(-26.276, 40.215, 32.633, 71.141)
 
-pm.pre <- terra::rast(paste0('../../GitHub/rfasst_v2/output/m2/pm25_gridded/raster_grid/EU_NECP_LTT_2030_pm25_fin_weighted.tif'))
+pm.pre <- terra::rast(paste0('data/rfasst_output/EU_NECP_LTT-Rev1.1_2030_pm25_fin_weighted.tif'))
 pm.pre <- terra::crop(pm.pre, extent_raster)
 
-pm.mort_yy <- get(load(paste0('../../GitHub/rfasst_v2/output/m3/pm25_gridded/EUR_grid/pm.mort_mat_2030_norm_EU_NECP_LTT.RData')))
+pm.mort_yy <- get(load(paste0('data/rfasst_output/EU_NECP_LTT-Rev1.1_2030_pm25_fin_weighted.tif')))
 vec <- as.vector(pm.mort_yy[['total']])
 pm.mort_rast <- terra::setValues(pm.pre, vec)
 
@@ -214,10 +216,13 @@ world <- sf::st_make_valid(world)
 world <- sf::st_wrap_dateline(world, options = c("WRAPDATELINE=YES"))
 
 # Define EU country codes based on nuts3_plot_data
-eu_countries <- unique(nuts3_plot_data$CNTR_CODE)
+eu_countries <- c(unique(nuts3_plot_data$CNTR_CODE), 'BA', 'XK')
 
 # Add a column to classify EU and non-EU countries
 world <- world %>%
+  dplyr::mutate(iso_a2 = dplyr::if_else(is.na(iso_a2) | iso_a2 == -99, iso_a2_eh, iso_a2)) %>% 
+  dplyr::mutate(iso_a2 = dplyr::if_else(iso_a2 == 'GB', 'UK', iso_a2)) %>% 
+  dplyr::mutate(iso_a2 = dplyr::if_else(iso_a2 == 'GR', 'EL', iso_a2)) %>% 
   dplyr::mutate(eu_status = ifelse(iso_a2 %in% eu_countries, "EU", "Non-EU"))
 world <- world %>% dplyr::filter(continent != "Antarctica")
 world <- world %>% dplyr::filter(sf::st_area(geometry) > units::set_units(1000, "km^2"))
